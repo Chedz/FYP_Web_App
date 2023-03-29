@@ -1,0 +1,8 @@
+<<<<<<< HEAD
+dist/
+.parcel-cache/
+node_modules/
+=======
+node_modules
+.DS_Store
+>>>>>>> be69096f1a49ca031aff9d9c5d19ae2c82a4ad4a
