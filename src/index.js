@@ -14,6 +14,8 @@ import { createCamera, createComposer, createRenderer, runApp } from "./core-uti
 
 // Other deps
 import Tile from './assets/checker_tile.png'
+import Wood from './assets/wood_floor.jpeg'
+import Grass from './assets/grass.jpeg'
 
 global.THREE = THREE
 
@@ -31,6 +33,9 @@ const params = {
   aperture: 0,
   maxblur: 0.0
 }
+
+var renderBorder = true;
+var renderMultiBorder = false;
 
 
 /**************************************************
@@ -232,14 +237,25 @@ addConvexGeometry(){
       var dotMaterial;
       var yValue;
       if(vertices[i][0] == 0){
-        dotMaterial = new THREE.PointsMaterial({ size: 0.1, color: 0xff0000 }); //border
-        yValue = 0.5;
+        if(renderBorder){
+          dotMaterial = new THREE.PointsMaterial({ size: 0.1, color: 0xff0000 }); //border
+          // yValue = 0.5;
 
-        for (var j = 0; j < 5; j++) {
-          const dotGeometry = new THREE.BufferGeometry();
-          dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([vertices[i][2],yValue * j,vertices[i][1]]), 3));
-          const dot = new THREE.Points(dotGeometry, dotMaterial);
-          scene.add(dot);
+          if(renderMultiBorder){
+            yValue = 0.5;
+            for (var j = 0; j < 5; j++) {
+              const dotGeometry = new THREE.BufferGeometry();
+              dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([vertices[i][2],yValue * j,vertices[i][1]]), 3));
+              const dot = new THREE.Points(dotGeometry, dotMaterial);
+              scene.add(dot);
+            }
+          }else{
+            yValue = 0.2;
+            const dotGeometry = new THREE.BufferGeometry();
+            dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([vertices[i][2],yValue * j,vertices[i][1]]), 3));
+            const dot = new THREE.Points(dotGeometry, dotMaterial);
+            scene.add(dot);
+          }
         }
         
       }else{
@@ -428,7 +444,7 @@ addConvexGeometry(){
   loadTexture(mshStdFloor) {
     return new Promise((resolve, reject) => {
       var loader = new THREE.TextureLoader()
-      loader.load(Tile, function (texture) {
+      loader.load(Wood, function (texture) {
         texture.wrapS = THREE.RepeatWrapping
         texture.wrapT = THREE.RepeatWrapping
         texture.repeat.set(40, 40)
