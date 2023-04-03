@@ -24,18 +24,28 @@ global.THREE = THREE
  *************************************************/
 const params = {
   // general scene params
-  speed: 1,
-  lightOneSwitch: true,
-  lightTwoSwitch: true,
-  lightThreeSwitch: true,
+  // speed: 1,
+  enableMarkerMeasurements: false,
+  renderHull: true,
+  // renderEmpty: true,
+  renderFloor: true,
   // Bokeh pass properties
-  focus: 0.0,
-  aperture: 0,
-  maxblur: 0.0
+  // focus: 0.0,
+  // aperture: 0,
+  // maxblur: 0.0
 }
 
 var renderBorder = true;
 var renderMultiBorder = false;
+// var renderEmpty = true;
+var renderFloor = true;
+const pointer = new THREE.Vector2();
+let raycaster;
+let globalPoints;
+let markerPoints = [];
+let enableMarkerMeasurements = false;
+var mshStdFloor;
+let convMesh;
 
 
 /**************************************************
@@ -113,10 +123,11 @@ let app = {
     // Create the floor
     const geoFloor = new THREE.BoxGeometry(200, 0.1, 200)
     const matStdFloor = new THREE.MeshStandardMaterial({ color: 0x808080, roughness: 0.5, metalness: 0 })
-    const mshStdFloor = new THREE.Mesh(geoFloor, matStdFloor)
+    mshStdFloor = new THREE.Mesh(geoFloor, matStdFloor)
     // need await to make sure animation starts only after texture is loaded
     // this works because the animation code is 'then-chained' after initScene(), see core-utils.runApp
     await this.loadTexture(mshStdFloor)
+    console.log(mshStdFloor)
     scene.add(mshStdFloor)
 
     // Create the torus knot
@@ -132,27 +143,41 @@ let app = {
     // GUI controls
     const gui = new dat.GUI()
 
-    gui.add(params, "speed", 1, 10, 0.5)
-    gui.add(params, "lightOneSwitch").name('Red light').onChange((val) => {
-      rectLight1.intensity = val ? 5 : 0
-    })
-    gui.add(params, "lightTwoSwitch").name('Green light').onChange((val) => {
-      rectLight2.intensity = val ? 5 : 0
-    })
-    gui.add(params, "lightThreeSwitch").name('Blue light').onChange((val) => {
-      rectLight3.intensity = val ? 5 : 0
-    })
+    // gui.add(params, "speed", 1, 10, 0.5)
+    // gui.add(params, "lightOneSwitch").name('Red light').onChange((val) => {
+    //   rectLight1.intensity = val ? 5 : 0
+    // })
+    // gui.add(params, "lightTwoSwitch").name('Green light').onChange((val) => {
+    //   rectLight2.intensity = val ? 5 : 0
+    // })
+    // gui.add(params, "lightThreeSwitch").name('Blue light').onChange((val) => {
+    //   rectLight3.intensity = val ? 5 : 0
+    // })
 
-    const matChanger = () => {
-      bokehPass.uniforms['focus'].value = params.focus
-      bokehPass.uniforms['aperture'].value = params.aperture * 0.00001
-      bokehPass.uniforms['maxblur'].value = params.maxblur
-    }
+    gui.add(params, "enableMarkerMeasurements").name('Measure').onChange((val) => {
+      enableMarkerMeasurements = val ? true : false
+    });
+    gui.add(params, "renderHull").name('Render Convex Hull').onChange((val) => {
+      convMesh.visible = val ? true : false
+    });
+    // gui.add(params, "renderEmpty").name('Render Empty').onChange((val) => {
+    //   renderEmpty = val ? true : false
+    // });
+    gui.add(params, "renderFloor").name('Render Floor').onChange((val) => {
+      mshStdFloor.visible = val ? true : false
+    });
+    
 
-    let bokehFolder = gui.addFolder(`Bokeh Pass`)
-    bokehFolder.add(params, 'focus', 0.0, 3000.0, 10).onChange(matChanger)
-    bokehFolder.add(params, 'aperture', 0, 10, 0.1).onChange(matChanger)
-    bokehFolder.add(params, 'maxblur', 0.0, 0.01, 0.001).onChange(matChanger)
+    // const matChanger = () => {
+    //   bokehPass.uniforms['focus'].value = params.focus
+    //   bokehPass.uniforms['aperture'].value = params.aperture * 0.00001
+    //   bokehPass.uniforms['maxblur'].value = params.maxblur
+    // }
+
+    // let bokehFolder = gui.addFolder(`Bokeh Pass`)
+    // bokehFolder.add(params, 'focus', 0.0, 3000.0, 10).onChange(matChanger)
+    // bokehFolder.add(params, 'aperture', 0, 10, 0.1).onChange(matChanger)
+    // bokehFolder.add(params, 'maxblur', 0.0, 0.01, 0.001).onChange(matChanger)
 
     // Stats - show fps
     this.stats1 = new Stats()
@@ -161,10 +186,16 @@ let app = {
     // this.container is the parent DOM element of the threejs canvas element
     this.container.appendChild(this.stats1.domElement)
 
-    this.addConvexGeometry();
+    this.addPointsFromMap();
+    raycaster = new THREE.Raycaster();
+		raycaster.params.Points.threshold = 0.1;
+    window.addEventListener( 'resize', onWindowResize );
+    document.addEventListener( 'pointermove', onPointerMove );
+    document.addEventListener( 'click', onLeftClick );
+    document.addEventListener( 'contextmenu', onRightClick );
   },
 
-addConvexGeometry(){
+  addPointsFromMap(){
 
   var rawInputData;
 
@@ -180,21 +211,6 @@ addConvexGeometry(){
     console.log(typeof(rawInputData));
     console.log(rawInputData.length);
 
-    // var numbers;
-    // numbers = rawInputData.split(" ");
-    // for (var i = 0; i < numbers.length; i++) {
-    //   numbers[i] = parseFloat(numbers[i]);
-    // }
-
-    // var vertices = [];
-    // for (var i = 0; i < numbers.length; i+=3) {
-    //   vertices.push([numbers[i], numbers[i+1], numbers[i+2]]);
-    // }
-
-    // for (var i = 0; i < 20; i++) {
-    //   console.log(vertices[i]);
-    // }
-
     var vertices = [];
     vertices = rawInputData.split("\n");
 
@@ -208,32 +224,7 @@ addConvexGeometry(){
       vertices[i] = tempArr;
     }
 
-    // for (var i = 0; i < 20; i++) {
-    //   console.log(vertices[i]);
-    // }
-
-    // for (var i = 0; i < vertices.length; i++) {
-    //   if (vertices[i][0] == 0) { //254
-    //     points.push([vertices[i][1], vertices[i][2]]);
-    //   }
-    // }
-
-    // for (var i = 0; i < 20; i++) {
-    //   console.log(points[i]);
-    // }
-    // console.log(points.length);
-
     for (var i = 0; i < vertices.length -1; i++) { //points.length
-      // var dotGeometry = new THREE.BufferGeometry();
-      // var dotGeometryVertices = [];
-      // dotGeometryVertices.push(new THREE.Vector3( points[i][0], 0.5 , points[i][1]));
-      // dotGeometry.setAttribute( 'position', new THREE.BufferAttribute( dotGeometryVertices, 3 ) );
-      // var dotMaterial = new THREE.PointsMaterial( { size: 1, sizeAttenuation: false } );
-      // var dot = new THREE.Points( dotGeometry, dotMaterial );
-      // scene.add( dot );
-
-
-      // const dotGeometry = new THREE.BufferGeometry();
       var dotMaterial;
       var yValue;
       if(vertices[i][0] == 0){
@@ -261,7 +252,7 @@ addConvexGeometry(){
       }else{
         const dotGeometry = new THREE.BufferGeometry();
         dotMaterial = new THREE.PointsMaterial({ size: 0.1, color: 0x00ff00 }); //empty space
-        yValue = 0.2;
+        yValue = 0.1;
 
         dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([vertices[i][2],yValue,vertices[i][1]]), 3));
         const dot = new THREE.Points(dotGeometry, dotMaterial);
@@ -275,42 +266,10 @@ addConvexGeometry(){
     }
 
     // camera.position.set(51.224998/2, 25, 51.224998)/2;
-    this.controls.target.set(4.097548, 0, 2.919713); 
-
-
-
+    this.controls.target.set(10, 0, 10);
+    // this.controls.target.set(4.097548, 0, 2.919713); 
 
   });
-  //const fs = require('fs');
-
-  // fs.readFile('../map_files/knownSpacePoints.txt', 'utf8', function(err, data) {
-  //   if (err){
-  //     console.error(err);
-  //     return;
-  //   }
-  //   console.log(data);
-  // });
-
-  // var url = require('../map_files/knownSpacePoints.txt');
-
-  // var loader = new THREE.FileLoader();
-
-  // console.log(window.location.pathname);
-
-  // loader.load(
-  //    url,
-  //     function ( fileData ) {
-  //       console.log('loaded data!');
-  //       console.log(typeof(fileData));
-  //       console.log(fileData);
-  //     });
-
-  // for (var i = 0; i < 20; i++) {
-  //   console.log(points[i]);
-  // }
-
-
-
 
   // fetch('http://localhost:6969/vert')
   // fetch('http://localhost:6968/output/1d') // /1d/mostRecent
@@ -360,84 +319,51 @@ addConvexGeometry(){
 
         //-51.224998, -51.224998, 0.000000
         //-4.097548, -2.919713, 0.000000
-        var xOffSet = 4.097548;
-        var zOffSet = 2.919713;
-        dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([ zOffSet + (vertices[i][2] ) , vertices[i][1] - yOffset, xOffSet - (vertices[i][0] ) ]), 3));
+        var xOffSet = 11; //4.097548;
+        var zOffSet = 8.5; //2.919713;
+        dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([ zOffSet + (vertices[i][0] ) , vertices[i][1] - yOffset, xOffSet - (vertices[i][2] ) ]), 3)); //2, 0
         const dot = new THREE.Points(dotGeometry, dotMaterial);
         scene.add(dot);
         //xOffSet + (vertices[i][0] )
         // zOffSet - (vertices[i][2] ) 
+      
     }
-
-
-    // for (var i = 0; i < vertices.length -1; i++) { //points.length
-
-    //   var dotMaterial;
-    //   var yValue;
-    //   if(vertices[i][0] == 0){
-    //     dotMaterial = new THREE.PointsMaterial({ size: 0.1, color: 0xff0000 }); //border
-    //     yValue = 0.1;
-
-    //     for (var j = 0; j < 10; j++) {
-    //       const dotGeometry = new THREE.BufferGeometry();
-    //       dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([vertices[i][2],yValue * j,vertices[i][1]]), 3));
-    //       const dot = new THREE.Points(dotGeometry, dotMaterial);
-    //       scene.add(dot);
-    //     }
-        
-    //   }else{
-    //     const dotGeometry = new THREE.BufferGeometry();
-    //     dotMaterial = new THREE.PointsMaterial({ size: 0.1, color: 0x00ff00 }); //empty space
-    //     yValue = 0.2;
-
-    //     dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([vertices[i][2],yValue,vertices[i][1]]), 3));
-    //     const dot = new THREE.Points(dotGeometry, dotMaterial);
-    //     scene.add(dot);
-    //   }
-    //   // dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([vertices[i][2],yValue,vertices[i][1]]), 3));
-    //   // const dot = new THREE.Points(dotGeometry, dotMaterial);
-    //   // scene.add(dot);
-
-
-    // }
+    globalPoints = vertices;
+    this.addConvMesh(vertices, xOffSet, yOffset, zOffSet);
 
   });
 
-
-
-	// let vertices = [
-	// 	[0,0,0],
-	// 	[4.5,0,0],
-	// 	[4.5,0,3],
-	// 	[0,0,3],
-	// 	[0,3,0],
-	// 	[4.5,3,0],
-	// 	[4.5,3,3],
-	// 	[0,3,3],
-	// 	[2.25,5,1.5], //change y-component to see geometry change
-	// ]
-
-	// let positions = [];
-
-	// for(let i = 0; i < vertices.length; i++){
-	// 	positions.push( new THREE.Vector3(vertices[i][0], vertices[i][1], vertices[i][2]));
-	// }
-	
-	// // var mesh = new THREE.ConvexGeometry( positions );
-	// var geom = new ConvexGeometry(positions);
-	// // console.log(geom.computeBoundingBox());
-	// //geom.drawRange.count = 18; // draw half of the geometry
-
-	// //const convMaterial = new THREE.MeshBasicMaterial( { color: 0x00ff00 } );
-	// const convMaterial = new THREE.MeshPhongMaterial( { color: 0x00ff00, side: THREE.BackSide } ) //map: texture
-
-	// convMesh = new THREE.Mesh( geom, convMaterial );
-	// convMesh.position.set(0,0,0);
-	// // convMesh.backSided = true;
-
-	// scene.add( convMesh );
-	// console.log(convMesh);
 },
+
+  addConvMesh(vertices, xOffSet, yOffset, zOffSet){
+    let positions = [];
+
+    //zOffSet + (vertices[i][0] ) , vertices[i][1] - yOffset, xOffSet - (vertices[i][2] )
+
+    for(let i = 0; i < vertices.length; i++){
+      if(vertices[i][0] == null || vertices[i][1] == null || vertices[i][2] == null){
+        console.log("null points");
+      }else{
+        positions.push( new THREE.Vector3(vertices[i][0] + zOffSet, vertices[i][1] - yOffset, xOffSet - vertices[i][2]));
+      // console.log(vertices[i][0], vertices[i][1], vertices[i][2]);
+      }
+    }
+    
+    // var mesh = new THREE.ConvexGeometry( positions );
+    var geom = new ConvexGeometry(positions);
+    // console.log(geom.computeBoundingBox());
+    //geom.drawRange.count = 18; // draw half of the geometry
+
+    //const convMaterial = new THREE.MeshBasicMaterial( { color: 0x00ff00 } );
+    const convMaterial = new THREE.MeshPhongMaterial( { color: 0xFF007D, side: THREE.BackSide } ) //map: texture
+
+    convMesh = new THREE.Mesh( geom, convMaterial );
+    convMesh.position.set(0,0,0);
+    // convMesh.backSided = true;
+
+    scene.add( convMesh );
+    console.log(convMesh);
+  },
 
   // load a texture for the floor
   // returns a promise so the caller can await on this function
@@ -463,8 +389,104 @@ addConvexGeometry(){
     this.stats1.update()
 
     // rotate the torus
-    this.meshKnot.rotation.y = elapsed * params.speed
+    // this.meshKnot.rotation.y = elapsed * params.speed
+    raycaster.setFromCamera( pointer, camera );
+    // const intersections = raycaster.intersectObjects( scene.children, false );
+    //console.log(intersections)
   }
+}
+
+function onLeftClick( event ){ //add marker point
+  if(!enableMarkerMeasurements) return;
+  console.log("left click");
+  // const intersects = raycaster.intersectObjects( scene.children, false );
+  // if(intersects.length > 0){
+  //   console.log(intersects[0].object);
+  //   if(intersects[0].object == convMesh){
+  //     console.log("hit");
+  //   }
+  // }
+  pointPos = raycaster.intersectObjects( scene.children, false )[0].point;
+  dotMaterial = new THREE.PointsMaterial({ size: 0.2, color: 0xFFFF00 }); // marker point
+  const dotGeometry = new THREE.BufferGeometry();
+
+  dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([ pointPos.x, pointPos.y, pointPos.z ]), 3)); //2, 0
+  const markerPoint = new THREE.Points(dotGeometry, dotMaterial);
+
+  if(markerPoints.length == 0){
+    markerPoint.name = "markerPoint0";
+    scene.add(markerPoint);
+    markerPoints.push(markerPoint);
+  }
+  else if(markerPoints.length == 2){
+    scene.remove(markerPoints[0]);
+    markerPoints.shift();
+    markerPoints[0].name = "markerPoint0";
+    markerPoint.name = "markerPoint1";
+    scene.add(markerPoint);
+    markerPoints.push(markerPoint);
+  }
+  else{
+    markerPoint.name = "markerPoint1";
+    scene.add(markerPoint);
+    markerPoints.push(markerPoint);
+  }
+  console.log(markerPoints);
+  // markerPoint.name = "markerPoint";
+  // scene.add(markerPoint);
+
+  // markerPoints.push(markerPoint);
+
+  //geometry.attributes.position
+
+  calcMarkerDist();
+
+}
+
+function calcMarkerDist(){
+  if(markerPoints.length == 2){
+    // console.log(markerPoints[0].geometry.attributes.position.array);
+    // console.log(markerPoints[1].geometry.attributes.position.array);
+    let vec0 = new THREE.Vector3(markerPoints[0].geometry.attributes.position.array[0], markerPoints[0].geometry.attributes.position.array[1], markerPoints[0].geometry.attributes.position.array[2]);
+    let vec1 = new THREE.Vector3(markerPoints[1].geometry.attributes.position.array[0], markerPoints[1].geometry.attributes.position.array[1], markerPoints[1].geometry.attributes.position.array[2]);
+    let dist = vec0.distanceTo(vec1);
+    console.log("DIST: " + dist);
+    // document.getElementById("markerDist").innerHTML = "Distance: " + dist.toFixed(2) + "m";
+  }
+}
+
+function onRightClick( event ){ //delete marker point
+  if(!enableMarkerMeasurements) return;
+  console.log("right click");
+  let intersects = raycaster.intersectObjects( scene.children, false );
+  console.log(intersects);
+  for(let i = 0; i < intersects.length; i++){
+    // if(intersects[i].object == convMesh){
+    //   console.log("hit");
+    //   console.log(intersects[i].point);
+    // }
+    if(intersects[i].object.name == "markerPoint"){
+      console.log("hit");
+      console.log(intersects[i].object);
+      scene.remove(intersects[i].object);
+    }
+  }
+}
+
+function onPointerMove( event ) {
+
+  pointer.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+  pointer.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+
+}
+
+function onWindowResize() {
+
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+
+  renderer.setSize( window.innerWidth, window.innerHeight );
+
 }
 
 /**************************************************
