@@ -3,11 +3,6 @@ import * as THREE from "three"
 import * as dat from 'dat.gui'
 import Stats from "three/examples/jsm/libs/stats.module"
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls"
-import { Earcut } from "three/src/extras/Earcut"
-// import 'three/examples/js/QuickHull';
-import { ConvexGeometry } from "three/examples/jsm/geometries/ConvexGeometry"
-import { RectAreaLightHelper } from "three/examples/jsm/helpers/RectAreaLightHelper"
-import { RectAreaLightUniformsLib } from "three/examples/jsm/lights/RectAreaLightUniformsLib"
 import { BokehPass } from "three/examples/jsm/postprocessing/BokehPass"
 
 // Core boilerplate code deps
@@ -17,8 +12,7 @@ import { createCamera, createComposer, createRenderer, runApp } from "./core-uti
 import Tile from './assets/checker_tile.png'
 import Wood from './assets/wood_floor.jpeg'
 import Grass from './assets/grass.jpeg'
-import Delaunator from 'delaunator';
-import jsyaml from 'js-yaml'; //convert yaml to json
+import {renderAll, getConfigJSON} from './processRender'
 
 global.THREE = THREE
 
@@ -38,9 +32,6 @@ const params = {
   // maxblur: 0.0
 }
 
-var renderBorder = true;
-var renderMultiBorder = false;
-// var renderEmpty = true;
 var renderFloor = true;
 const pointer = new THREE.Vector2();
 let raycaster;
@@ -57,6 +48,7 @@ let yOffset1d;
  *************************************************/
 // Create the scene
 let scene = new THREE.Scene()
+global.scene = scene;
 
 // Create the renderer via 'createRenderer',
 // 1st param receives additional WebGLRenderer properties
@@ -92,27 +84,7 @@ let app = {
   async initScene() {
     // OrbitControls
     this.controls = new OrbitControls(camera, renderer.domElement)
-    this.controls.enableDamping = true
-
-    // // Scene setup taken from https://threejs.org/examples/#webgl_lights_rectarealight
-    // // Create rect area lights
-    // RectAreaLightUniformsLib.init()
-
-    // let rectLight1 = new THREE.RectAreaLight(0xff0000, 5, 4, 10)
-    // rectLight1.position.set(- 5, 5, 5)
-    // scene.add(rectLight1)
-
-    // let rectLight2 = new THREE.RectAreaLight(0x00ff00, 5, 4, 10)
-    // rectLight2.position.set(0, 5, 5)
-    // scene.add(rectLight2)
-
-    // let rectLight3 = new THREE.RectAreaLight(0x0000ff, 5, 4, 10)
-    // rectLight3.position.set(5, 5, 5)
-    // scene.add(rectLight3)
-
-    // scene.add(new RectAreaLightHelper(rectLight1))
-    // scene.add(new RectAreaLightHelper(rectLight2))
-    // scene.add(new RectAreaLightHelper(rectLight3))
+    this.controls.enableDamping = true;
 
     // ambient light
     scene.add( new THREE.AmbientLight( 0x222222 ) );
@@ -190,7 +162,10 @@ let app = {
     // this.container is the parent DOM element of the threejs canvas element
     this.container.appendChild(this.stats1.domElement)
 
-    this.addPointsFromMap();
+    await renderAll();
+    var origin = getConfigJSON().origin;
+    this.controls.target.set(-origin[0], 0, -origin[1]);
+
     raycaster = new THREE.Raycaster();
 		raycaster.params.Points.threshold = 0.1;
     window.addEventListener( 'resize', onWindowResize );
@@ -213,387 +188,6 @@ let app = {
     document.body.appendChild(valueElement);
   },
 
-  addPointsFromMap(){
-
-  var rawInputData;
-
-  var points =[];
-
-  //  fetch('http://localhost:6968/output/2d') // /2d/mostRecent
-  //fetch('http://localhost:6969/output/2d')
-  // fetch('http://localhost:6968/output/2d/mostRecent') 
-  fetch('http://localhost:6968/2d/mostRecent') 
-  .then(response => response.text())
-  .then(data => { 
-    rawInputData = data; 
-    console.log(typeof(rawInputData));
-    console.log(rawInputData.length);
-
-    var vertices = [];
-    vertices = rawInputData.split("\n");
-
-    for (var i = 0; i < vertices.length; i++) { //
-      //vertices[i] = parseFloat(vertices[i]);
-      var tempArr; 
-      tempArr = vertices[i].split(" ");
-      for (var j = 0; j < tempArr.length; j++) {
-        tempArr[j] = parseFloat(tempArr[j]);
-      }
-      vertices[i] = tempArr;
-    }
-
-    for (var i = 0; i < vertices.length -1; i++) { //points.length
-      var dotMaterial;
-      var yValue;
-      if(vertices[i][0] == 0){
-        if(renderBorder){
-          dotMaterial = new THREE.PointsMaterial({ size: 0.1, color: 0xff0000 }); //border
-          // yValue = 0.5;
-
-          if(renderMultiBorder){
-            yValue = 0.5;
-            for (var j = 0; j < 5; j++) {
-              const dotGeometry = new THREE.BufferGeometry();
-              dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([vertices[i][2],yValue * j,vertices[i][1]]), 3));
-              const dot = new THREE.Points(dotGeometry, dotMaterial);
-              scene.add(dot);
-            }
-          }else{
-            yValue = 0.2;
-            const dotGeometry = new THREE.BufferGeometry();
-            dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([vertices[i][2],yValue * j,vertices[i][1]]), 3));
-            const dot = new THREE.Points(dotGeometry, dotMaterial);
-            scene.add(dot);
-          }
-        }
-        
-      }else{
-        const dotGeometry = new THREE.BufferGeometry();
-        dotMaterial = new THREE.PointsMaterial({ size: 0.1, color: 0x00ff00 }); //empty space
-        yValue = 0.05; //0.1;
-
-        dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([vertices[i][2],yValue,vertices[i][1]]), 3));
-        const dot = new THREE.Points(dotGeometry, dotMaterial);
-        scene.add(dot);
-      }
-      // dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([vertices[i][2],yValue,vertices[i][1]]), 3));
-      // const dot = new THREE.Points(dotGeometry, dotMaterial);
-      // scene.add(dot);
-
-
-    }
-
-    // camera.position.set(51.224998/2, 25, 51.224998)/2;
-    this.controls.target.set(10, 0, 10);
-    // this.controls.target.set(4.097548, 0, 2.919713); 
-
-  });
-
-  // fetch('http://localhost:6969/vert')
-  // fetch('http://localhost:6968/output/1d') // /1d/mostRecent
-  fetch('http://localhost:6968/1d_0/mostRecent')
-  .then(response => response.text())
-  .then(data => { 
-    rawInputData = data; 
-    console.log(typeof(rawInputData));
-    console.log(rawInputData.length);
-
-    var vertices = [];
-    vertices = rawInputData.split("\n");
-
-    var maxYvalue = 0;
-    var minYvalue = 100000;
-
-    for (var i = 0; i < vertices.length; i++) { //
-      //vertices[i] = parseFloat(vertices[i]);
-      var tempArr; 
-      tempArr = vertices[i].split(" , ");
-      for (var j = 0; j < tempArr.length; j++) {
-        tempArr[j] = parseFloat(tempArr[j]);
-        if (j == 1) {
-          if (tempArr[j] > maxYvalue) {
-            maxYvalue = tempArr[j];
-          }
-          if (tempArr[j] < minYvalue) {
-            minYvalue = tempArr[j];
-          }
-        }
-      }
-      vertices[i] = tempArr;
-    }
-
-    // console.log(vertices[0]);
-    // console.log(vertices[vertices.length/2]);
-    console.log('adding 1d points');
-    console.log(maxYvalue);
-    console.log(minYvalue);
-
-    yOffset1d = minYvalue;
-
-    var yOffset = minYvalue; //43; //0.8
-    // var xOffSet = 7//11; //4.097548;
-    // var zOffSet = 12.2//8.5; //2.919713;
-    var xOffSet = 7.135551//11; //4.097548;
-    var zOffSet = 12.215772//8.5; //2.919713;
-
-    // for (var i = 0; i < vertices.length -1; i++) {
-    //     const dotGeometry = new THREE.BufferGeometry();
-    //     dotMaterial = new THREE.PointsMaterial({ size: 0.1, color: 0x0000ff }); //empty space
-    //     yValue = 0;
-
-    //     //-51.224998, -51.224998, 0.000000
-    //     //-4.097548, -2.919713, 0.000000
-    //     // var xOffSet = 7//11; //4.097548;
-    //     // var zOffSet = 12.2//8.5; //2.919713;
-    //     dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([ zOffSet + (vertices[i][0] ) , vertices[i][1] - yOffset, xOffSet - (vertices[i][2] ) ]), 3)); //2, 0
-    //     const dot = new THREE.Points(dotGeometry, dotMaterial);
-    //     scene.add(dot);
-    //     //xOffSet + (vertices[i][0] )
-    //     // zOffSet - (vertices[i][2] ) 
-      
-    // }
-    this.delaunayTriangulation(true, vertices, xOffSet, yOffset, zOffSet);
-    // globalPoints = vertices;
-    //  this.addConvMesh(vertices, xOffSet, yOffset, zOffSet);
-    //this.addCustomMesh(vertices);
-
-  });
-
-  fetch('http://localhost:6968/1d_1/mostRecent')
-  .then(response => response.text())
-  .then(data => { 
-    rawInputData = data; 
-    console.log(typeof(rawInputData));
-    console.log(rawInputData.length);
-
-    var vertices = [];
-    vertices = rawInputData.split("\n");
-
-    var maxYvalue = 0;
-    var minYvalue = 100000;
-
-    for (var i = 0; i < vertices.length; i++) { //
-      //vertices[i] = parseFloat(vertices[i]);
-      var tempArr; 
-      tempArr = vertices[i].split(" , ");
-      for (var j = 0; j < tempArr.length; j++) {
-        tempArr[j] = parseFloat(tempArr[j]);
-        if (j == 1) {
-          if (tempArr[j] > maxYvalue) {
-            maxYvalue = tempArr[j];
-          }
-          if (tempArr[j] < minYvalue) {
-            minYvalue = tempArr[j];
-          }
-        }
-      }
-      vertices[i] = tempArr;
-    }
-
-    console.log(vertices[0]);
-    console.log(vertices[vertices.length/2]);
-
-    console.log(maxYvalue);
-    console.log(minYvalue);
-
-    var yOffset = yOffset1d//minYvalue; //43; //0.8
-    var xOffSet = 7.135551//11; //4.097548;
-    var zOffSet = 12.215772//8.5; //2.919713;
-
-
-    // for (var i = 0; i < vertices.length -1; i++) {
-    //     const dotGeometry = new THREE.BufferGeometry();
-    //     dotMaterial = new THREE.PointsMaterial({ size: 0.1, color: 0xA020F0 }); //empty space
-    //     yValue = 0;
-
-    //     //-51.224998, -51.224998, 0.000000
-    //     //-4.097548, -2.919713, 0.000000
-    //     // var xOffSet = 7//11; //4.097548;
-    //     // var zOffSet = 12.2//8.5; //2.919713;
-    //     dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([ zOffSet + (vertices[i][0] ) , vertices[i][1] - yOffset, xOffSet - (vertices[i][2] ) ]), 3)); //2, 0
-    //     const dot = new THREE.Points(dotGeometry, dotMaterial);
-    //     scene.add(dot);
-    //     //xOffSet + (vertices[i][0] )
-    //     // zOffSet - (vertices[i][2] ) 
-      
-    // }
-
-
-
-    // globalPoints = vertices;
-    //  this.addConvMesh(vertices, xOffSet, yOffset, zOffSet);
-    //this.addCustomMesh(vertices);
-     this.delaunayTriangulation(false, vertices, xOffSet, yOffset, zOffSet);
-
-     
-     fetch('http://localhost:6968/yaml/mostRecent')
-     .then(response => response.text())
-     .then(data => { 
-       rawInputData = data; 
-       console.log('received yaml data');
-       console.log(typeof(rawInputData));
-       console.log(rawInputData.length);
-
-
-        Data = jsyaml.load(rawInputData);
-        console.log(Data);
-
-     });
-
-  });
-  // this.addConvMesh(vertices, xOffSet, yOffset, zOffSet);
-  //Need to add convex mesh for top and bottom points taken from text files.
-  //Note, maybe not a convex mesh, but a custom mesh with traingulation so it is not enclosed.
-
-
-},
-
-addCustomMesh(vertices){ //not working currently
-  var holes = [];
-  var triangles, mesh;
-  var geometry = new THREE.BufferGeometry();
-  var material = new THREE.MeshBasicMaterial();
-
-  geometry.vertices = vertices;
-
-  triangles = THREE.ShapeUtils.triangulateShape( vertices, holes );
-
-  for( var i = 0; i < triangles.length; i++ ){
-
-      geometry.faces.push( new THREE.Face3( triangles[i][0], triangles[i][1], triangles[i][2] ));
-
-  }
-
-  mesh = new THREE.Mesh( geometry, material );
-},
-
-  addConvMesh(vertices, xOffSet, yOffset, zOffSet){
-    let positions = [];
-
-    //zOffSet + (vertices[i][0] ) , vertices[i][1] - yOffset, xOffSet - (vertices[i][2] )
-
-    for(let i = 0; i < vertices.length; i++){
-      if(vertices[i][0] == null || vertices[i][1] == null || vertices[i][2] == null){
-        console.log("null points");
-      }else{
-        positions.push( new THREE.Vector3(vertices[i][0] + zOffSet, vertices[i][1] - yOffset, xOffSet - vertices[i][2]));
-      // console.log(vertices[i][0], vertices[i][1], vertices[i][2]);
-      }
-    }
-    
-    // var mesh = new THREE.ConvexGeometry( positions );
-    var geom = new ConvexGeometry(positions);
-    // console.log(geom.computeBoundingBox());
-    //geom.drawRange.count = 18; // draw half of the geometry
-
-    //const convMaterial = new THREE.MeshBasicMaterial( { color: 0x00ff00 } );
-    const convMaterial = new THREE.MeshPhongMaterial( { color: 0xFF007D, side: THREE.BackSide } ) //map: texture
-
-    convMesh = new THREE.Mesh( geom, convMaterial );
-    convMesh.position.set(0,0,0);
-    // convMesh.backSided = true;
-
-    scene.add( convMesh );
-    console.log(convMesh);
-  },
-
-  delaunayTriangulation(top, vertices, xOffSet, yOffset, zOffSet){
-
-    console.log("earcutTriangulation");
-    console.log(vertices.length);
-
-    var points3d = [];
-
-    for (let index = 0; index < vertices.length; index++) {
-      if(vertices[index][0] == null || vertices[index][1] == null || vertices[index][2] == null){
-        console.log("null points");
-      }else{
-        points3d.push(new THREE.Vector3(zOffSet + vertices[index][0], vertices[index][1] - yOffset, xOffSet - vertices[index][2]));
-      }
-      //zOffSet + (vertices[i][0] ) , vertices[i][1] - yOffset, xOffSet - (vertices[i][2] )
-    }
-
-    // let positions = [];
-    // for(let i = 0; i < vertices.length/20; i++){
-    //   if(vertices[i][0] == null || vertices[i][1] == null || vertices[i][2] == null){
-    //     console.log("null points");
-    //   }else{
-    //     // positions.push( new THREE.Vector3(vertices[i][0] + zOffSet, vertices[i][1] - yOffset, xOffSet - vertices[i][2]));
-    //     positions.push( vertices[i][0], vertices[i][1], vertices[i][2]);
-    //     // console.log(vertices.length)
-    //   // console.log(vertices[i][0], vertices[i][1], vertices[i][2]);
-    //   }
-    // }
-
-    // var triangles = Earcut.triangulate(positions, dim=3);
-    // console.log(triangles);
-
-    // const geometry = new THREE.BufferGeometry();
-    // geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    // geometry.setIndex(triangles);
-
-    // const material = new THREE.MeshBasicMaterial({color : 0x880000});
-    // const splineObject = new THREE.Mesh( geometry, material );
-
-    // scene.add(splineObject);
-
-    // splineObject.position.set(0,4,0);
-
-    // console.log(splineObject);
-
-
-
-    //   var size = { x: 200, y: 200 };
-    //   var pointsCount = 1000;
-    //   var points3d = [];
-    // for (let i = 0; i < pointsCount; i++) {
-    //   let x = randFloatSpread(size.x);
-    //   let z = randFloatSpread(size.y);
-    //   let y = (x / size.x * 5, z / size.y * 5) * 50 * Math.sin(x / 10);
-    //   points3d.push(new THREE.Vector3(x, y, z));
-    // }
-
-
-    var geom = new THREE.BufferGeometry().setFromPoints(points3d);
-    var cloud = new THREE.Points(
-      geom,
-      new THREE.PointsMaterial({ color: 0x99ccff, size: 0.05 })
-    );
-    scene.add(cloud);
-    console.log(cloud);
-    // cloud.position.set(0,35,0);
-
-    // triangulate x, z
-    var indexDelaunay = Delaunator.from(
-      points3d.map(v => {
-        return [v.x, v.z];
-      })
-    );
-
-    var meshIndex = []; // delaunay index => three.js index
-    for (let i = 0; i < indexDelaunay.triangles.length; i++){
-      meshIndex.push(indexDelaunay.triangles[i]);
-    }
-
-    geom.setIndex(meshIndex); // add three.js index to the existing geometry
-    geom.computeVertexNormals();
-    
-    if(top){
-      var mesh = new THREE.Mesh(
-        geom, // re-use the existing geometry
-        new THREE.MeshLambertMaterial({ color: "purple", wireframe: false })
-      );
-    }else{
-      var mesh = new THREE.Mesh(
-        geom, // re-use the existing geometry
-        new THREE.MeshLambertMaterial({ color: "blue", wireframe: false })
-      );
-    }
-
-    scene.add(mesh);
-    // mesh.position.set(0,35,0);
-
-  },
 
   // load a texture for the floor
   // returns a promise so the caller can await on this function
@@ -617,20 +211,12 @@ addCustomMesh(vertices){ //not working currently
   updateScene(interval, elapsed) {
     this.controls.update()
     this.stats1.update()
-
-    // rotate the torus
-    // this.meshKnot.rotation.y = elapsed * params.speed
     raycaster.setFromCamera( pointer, camera );
-    // const intersections = raycaster.intersectObjects( scene.children, false );
-    //console.log(intersections)
   }
 }
 
 function onKeyPress( event ) {
-  // console.log(event);
   if(event.key == "e"){
-    // enableMarkerMeasurements = !enableMarkerMeasurements;
-    // console.log("enableMarkerMeasurements: " + enableMarkerMeasurements);
     let pointPos = raycaster.intersectObjects( scene.children, false )[0].point;
     console.log("Elevation: " + pointPos.y);
   }
@@ -639,13 +225,7 @@ function onKeyPress( event ) {
 function onLeftClick( event ){ //add marker point
   if(!enableMarkerMeasurements) return;
   console.log("left click");
-  // const intersects = raycaster.intersectObjects( scene.children, false );
-  // if(intersects.length > 0){
-  //   console.log(intersects[0].object);
-  //   if(intersects[0].object == convMesh){
-  //     console.log("hit");
-  //   }
-  // }
+
   pointPos = raycaster.intersectObjects( scene.children, false )[0].point;
   dotMaterial = new THREE.PointsMaterial({ size: 0.2, color: 0xFFFF00 }); // marker point
   const dotGeometry = new THREE.BufferGeometry();
@@ -672,12 +252,6 @@ function onLeftClick( event ){ //add marker point
     markerPoints.push(markerPoint);
   }
   console.log(markerPoints);
-  // markerPoint.name = "markerPoint";
-  // scene.add(markerPoint);
-
-  // markerPoints.push(markerPoint);
-
-  //geometry.attributes.position
 
   calcMarkerDist();
 
@@ -725,14 +299,6 @@ function onPointerMove( event ) {
 function updateElevation(){
   let intersectedObjects = raycaster.intersectObjects( scene.children, false );
   if(intersectedObjects == 0) return;
-  // for (let index = 0; index < intersectedObjects.length; index++) {
-  //   //check if a point is within intersectedObjects and if so, return
-  //   // if(intersectedObjects[index].object.name == "markerPoint"){
-  //   //   return;
-  //   // }
-  //   console.log(intersectedObjects[index]);
-    
-  // }
 
   let pointPos = intersectedObjects[0].point;
   // console.log("Elevation: " + pointPos.y);
@@ -746,11 +312,6 @@ function onWindowResize() {
   camera.updateProjectionMatrix();
 
   renderer.setSize( window.innerWidth, window.innerHeight );
-
-}
-function randFloatSpread( range ) {
-
-	return range * ( 0.5 - Math.random() );
 
 }
 
