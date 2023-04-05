@@ -164,7 +164,23 @@ let app = {
 
     await renderAll();
     var origin = getConfigJSON().origin;
-    this.controls.target.set(-origin[0], 0, -origin[1]);
+    console.log(getConfigJSON);
+    //this.controls.target.set(-origin[0], 0, -origin[1]);
+    this.controls.target.set(0,0,0);
+
+    dotMaterial = new THREE.PointsMaterial({ size: 0.5, color: 0xFFFF00 }); //border
+    const dotGeometry = new THREE.BufferGeometry();
+    dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0.5, 0]), 3));
+    const dot = new THREE.Points(dotGeometry, dotMaterial);
+    scene.add(dot);
+    // -4.419973, -7.269125,  //The 2-D pose of the lower-left pixel in the map -> origin
+
+
+    //15.4, 5.300000000000001 origin pixel in pgm value
+
+
+    //-10.572565078735352, 0.05000000074505806 , 8.053475379943848 //where orgin should be in 3d space
+
 
     raycaster = new THREE.Raycaster();
 		raycaster.params.Points.threshold = 0.1;

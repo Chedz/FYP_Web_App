@@ -3,6 +3,9 @@ import Delaunator from 'delaunator';
 import { ConvexGeometry } from "three/examples/jsm/geometries/ConvexGeometry"
 var configJSON;
 var boundingSphereCenterMesh;
+var originPoint2d;
+let mapWidth;
+let mapHeight;
 
 export function getConfigJSON(){
   return configJSON;
@@ -24,7 +27,13 @@ export async function renderAll(){
     // console.log('maporigin')
     // console.log(mapOrigin);
 
-    await render2dVertices(free_thresh, occupied_thresh, true, false);
+    await render2dVertices(free_thresh, occupied_thresh, true, false, mapOrigin);
+    // await render2dVertices(free_thresh, occupied_thresh, true, false, [-4.43, -9.63, 0.000000]);
+    //10.572565078735352, 0.05000000074505806 , 8.053475379943848
+
+    // 8.85 and 16.9 metres
+    //origin: [-4.419973, -7.269125, 0]
+    
 
 
     let bottom1dVerticesData = await get1dVertices(false);
@@ -32,14 +41,16 @@ export async function renderAll(){
     let bottom1dMinY = bottom1dVerticesData[1];
     let bottomdMaxY = bottom1dVerticesData[2];
 
-    delaunayTriangulation(false, bottom1dVertices, -1 * mapOrigin[1], bottom1dMinY, -1 * mapOrigin[0] );
+    // delaunayTriangulation(false, bottom1dVertices, -1 * mapOrigin[1], bottom1dMinY, -1 * mapOrigin[0] );
+    delaunayTriangulation(false, bottom1dVertices, 0, bottom1dMinY, 0 );
 
     let top1dVerticesData = await get1dVertices(true);
     let top1dVertices = top1dVerticesData[0];
     let top1dMinY = top1dVerticesData[1];
     let top1dMaxY = top1dVerticesData[2];
 
-    delaunayTriangulation(true, top1dVertices, -1 * mapOrigin[1], bottom1dMinY, -1 * mapOrigin[0] );
+    // delaunayTriangulation(true, top1dVertices, -1 * mapOrigin[1], bottom1dMinY, -1 * mapOrigin[0] );
+    delaunayTriangulation(true, top1dVertices, 0, bottom1dMinY, 0 );
 
     return origin;
 
@@ -53,26 +64,99 @@ async function get2dVertices(){
     let rawInputData = await Request.get2dRecent();
 
     var vertices = [];
-    vertices = rawInputData.split("\n");
+    vertices = rawInputData.split("\n");  //split pgm.txt by row of pixels
+    let widthHeight = vertices[0];
+    let widthHeightArr = widthHeight.split(" ");
+    mapWidth = parseFloat(widthHeightArr[0]);
+    mapHeight = parseFloat(widthHeightArr[1]);
+    vertices.splice(0, 1); //remove first row of pgm.txt
 
-    for (var i = 0; i < vertices.length; i++) { // for each vertex
+    console.log(mapWidth * configJSON.resolution);
+    console.log(mapHeight * configJSON.resolution);
+
+    for (var i = 0; i < vertices.length; i++) { // for each row of pixels
+
       var tempArr = []; 
-      tempArr = vertices[i].split(" ");
+      tempArr = vertices[i].split(" "); //split row of pixels by space into individual pixels
+
       for (var j = 0; j < tempArr.length; j++) {
         tempArr[j] = parseFloat(tempArr[j]);
         if(tempArr[j] == null) break; //if null, skip to next point
       }
 
+      // if(i == vertices.length -1) originPoint2d = tempArr[0]; //if last row, first pixel is origin point
+
       vertices[i] = tempArr;
     }
+
+    console.log(originPoint2d);
 
     return vertices;
 }
 
-async function render2dVertices(free_thresh, occupied_thresh, renderBorder, renderMultiBorder){
+async function render2dVertices(free_thresh, occupied_thresh, renderBorder, renderMultiBorder, mapOrigin){
+    // let xOffSet = (mapWidth * configJSON.resolution) - mapOrigin[0];
+    // let zOffSet = (mapHeight * configJSON.resolution) - mapOrigin[1];
+
+
+
+    // let xOffSet = 0;
+    // let zOffSet = 0;
+
+
     console.log('render2dVertices');
     let vertices = await get2dVertices();
-    // console.log(vertices.length);
+    // let xOffSet = -1 *((mapWidth * configJSON.resolution) + mapOrigin[0]);
+    // let zOffSet = -1 *((mapHeight * configJSON.resolution) + mapOrigin[1]);
+
+    // xOffSet =  mapOrigin[0]; // -4.43 //-9.714648
+    // zOffSet =  mapOrigin[1] / 2.3; // -9.63 // -4.49 after divide by 2.3
+
+    // xOffSet = 0;
+    // zOffSet = 0;
+
+//-9.71, -10.33
+
+
+// xOffSet -9.714648
+// zOffSet -10.332941 -> -4.49 after divide by 2.3
+
+
+    // console.log('xOffSet');
+    // console.log(xOffSet);
+    // console.log('zOffSet');
+    // console.log(zOffSet);
+
+    // xOffSet = mapOrigin[0]; // -4.43
+    // zOffSet = mapOrigin[1]; // -9.63
+
+    /**
+     * issues: 
+     */
+
+    // console.log('xOffSet');
+    // console.log(xOffSet);
+    // console.log('zOffSet');
+    // console.log(zOffSet);
+
+    // console.log((mapWidth * configJSON.resolution) - mapOrigin[0])
+    // console.log((mapHeight * configJSON.resolution) - mapOrigin[1])
+
+    // console.log(mapOrigin[0]);
+    // console.log(mapOrigin[1]);
+    // console.log(mapWidth * configJSON.resolution); //15.55
+    // console.log(mapHeight * configJSON.resolution); //14.8
+    // console.log(mapWidth);
+    // console.log(mapHeight);
+    // console.log(configJSON.resolution);
+
+    // console.log(vertices);
+
+    //  console.log(vertices.length);
+    // console.log(vertices[vertices.length -2]); //0, 15.4, 5.300000000000001
+
+    let zOffset = (mapHeight * configJSON.resolution) + mapOrigin[1];
+    let xOffSet = mapOrigin[0];
 
     for (var i = 0; i < vertices.length -1; i++) { //points.length
         var dotMaterial;
@@ -86,7 +170,7 @@ async function render2dVertices(free_thresh, occupied_thresh, renderBorder, rend
               yValue = 0.5;
               for (var j = 0; j < 5; j++) {
                 const dotGeometry = new THREE.BufferGeometry();
-                dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([vertices[i][2],yValue * j,vertices[i][1]]), 3));
+                dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([vertices[i][2] + xOffSet, yValue * j,vertices[i][1] - zOffset]), 3));
                 const dot = new THREE.Points(dotGeometry, dotMaterial);
                 scene.add(dot);
               }
@@ -94,7 +178,8 @@ async function render2dVertices(free_thresh, occupied_thresh, renderBorder, rend
             let j = 1;
               yValue = 0.2;
               const dotGeometry = new THREE.BufferGeometry();
-              dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([vertices[i][2],yValue * j,vertices[i][1]]), 3));
+              // dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([vertices[i][2] + xOffSet, yValue * j, vertices[i][1] + zOffSet]), 3));
+              dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([vertices[i][2] + xOffSet, yValue * j, vertices[i][1] - zOffset]), 3));
               const dot = new THREE.Points(dotGeometry, dotMaterial);
               scene.add(dot);
             }
@@ -105,7 +190,7 @@ async function render2dVertices(free_thresh, occupied_thresh, renderBorder, rend
           dotMaterial = new THREE.PointsMaterial({ size: 0.1, color: 0x00ff00 }); //empty space
           yValue = 0.05; //0.1;
   
-          dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([vertices[i][2],yValue,vertices[i][1]]), 3));
+          dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([vertices[i][2] + xOffSet, yValue, vertices[i][1] - zOffset]), 3));
           const dot = new THREE.Points(dotGeometry, dotMaterial);
           scene.add(dot);
         }
