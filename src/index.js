@@ -23,7 +23,7 @@ const params = {
   // general scene params
   // speed: 1,
   enableMarkerMeasurements: false,
-  renderHull: true,
+  renderOrigin: false,
   // renderEmpty: true,
   renderFloor: true,
   // Bokeh pass properties
@@ -41,6 +41,7 @@ let enableMarkerMeasurements = false;
 var mshStdFloor;
 let convMesh;
 let yOffset1d;
+let originPoint;
 
 
 /**************************************************
@@ -130,11 +131,18 @@ let app = {
     //   rectLight3.intensity = val ? 5 : 0
     // })
 
+    dotMaterial = new THREE.PointsMaterial({ size: 0.5, color: 0xFFFF00 }); //border
+    const dotGeometry = new THREE.BufferGeometry();
+    dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0.15, 0]), 3));
+    originPoint = new THREE.Points(dotGeometry, dotMaterial);
+    originPoint.visible = false;
+    scene.add(originPoint);
+
     gui.add(params, "enableMarkerMeasurements").name('Measure').onChange((val) => {
       enableMarkerMeasurements = val ? true : false
     });
-    gui.add(params, "renderHull").name('Render Convex Hull').onChange((val) => {
-      convMesh.visible = val ? true : false
+    gui.add(params, "renderOrigin").name('Show Origin').onChange((val) => {
+      originPoint.visible = val ? true : false
     });
     // gui.add(params, "renderEmpty").name('Render Empty').onChange((val) => {
     //   renderEmpty = val ? true : false
@@ -162,17 +170,18 @@ let app = {
     // this.container is the parent DOM element of the threejs canvas element
     this.container.appendChild(this.stats1.domElement)
 
-    await renderAll();
+    let maxMinYValues = await renderAll(); //lowGroundLevel, highGroundLevel, lowClearance, highClearance 
     var origin = getConfigJSON().origin;
-    console.log(getConfigJSON);
+    // console.log(getConfigJSON);
     //this.controls.target.set(-origin[0], 0, -origin[1]);
     this.controls.target.set(0,0,0);
 
-    dotMaterial = new THREE.PointsMaterial({ size: 0.5, color: 0xFFFF00 }); //border
-    const dotGeometry = new THREE.BufferGeometry();
-    dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0.5, 0]), 3));
-    const dot = new THREE.Points(dotGeometry, dotMaterial);
-    scene.add(dot);
+    // dotMaterial = new THREE.PointsMaterial({ size: 0.5, color: 0xFFFF00 }); //border
+    // const dotGeometry = new THREE.BufferGeometry();
+    // dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0.5, 0]), 3));
+    // const dot = new THREE.Points(dotGeometry, dotMaterial);
+    // scene.add(dot);
+
     // -4.419973, -7.269125,  //The 2-D pose of the lower-left pixel in the map -> origin
 
 
@@ -189,19 +198,50 @@ let app = {
     document.addEventListener( 'click', onLeftClick );
     document.addEventListener( 'contextmenu', onRightClick );
     document.addEventListener( 'keydown', onKeyPress );
-    const valueElement = document.createElement('div');
-    valueElement.style.position = 'absolute';
-    valueElement.style.top = '10px';
-    valueElement.style.left = '100px';
-    valueElement.style.color = 'white';
-    valueElement.style.font = 'normal 18px Arial';
-    // valueElement.style.zIndex = '1';
-    // valueElement.style.width = '100%';
-    valueElement.id = 'valueId';
+    const elevationElement = document.createElement('div');
+    elevationElement.style.position = 'absolute';
+    elevationElement.style.top = '10px';
+    elevationElement.style.left = '100px';
+    elevationElement.style.color = 'white';
+    elevationElement.style.font = 'normal 18px Arial';
+    elevationElement.id = 'valueId';
     // set an initial value
-    valueElement.innerText = 'Elevation:';
+    elevationElement.innerText = 'Elevation:';
     // append the element to the body
-    document.body.appendChild(valueElement);
+    document.body.appendChild(elevationElement);
+
+    const distanceElement = document.createElement('div');
+    distanceElement.style.position = 'absolute';
+    distanceElement.style.top = '35px';
+    distanceElement.style.left = '100px';
+    distanceElement.style.color = 'white';
+    distanceElement.style.font = 'normal 18px Arial';
+    distanceElement.innerText = 'Distance:';
+    distanceElement.id = 'distanceId';
+    document.body.appendChild(distanceElement);
+
+    const mapNameElement = document.createElement('div');
+    mapNameElement.style.position = 'absolute';
+    mapNameElement.style.top = '10px';
+    mapNameElement.style.left = '280px';
+    mapNameElement.style.color = 'white';
+    mapNameElement.style.font = 'normal 18px Arial';
+    mapNameElement.innerText = 'Map Info: ' + getConfigJSON().image.slice(35, -4);
+    mapNameElement.id = 'mapNameId';
+    document.body.appendChild(mapNameElement);
+
+    console.log(maxMinYValues)
+
+    const mapSizeElement = document.createElement('div');
+    mapSizeElement.style.position = 'absolute';
+    mapSizeElement.style.top = '35px';
+    mapSizeElement.style.left = '280px';
+    mapSizeElement.style.color = 'white';
+    mapSizeElement.style.font = 'normal 18px Arial';
+    mapSizeElement.innerText = 'Min/Max Clearance: ' + (maxMinYValues[2] - maxMinYValues[0]).toFixed(2) + 'm , ' + (maxMinYValues[3] - maxMinYValues[0]).toFixed(2) + 'm';
+    mapSizeElement.id = 'mapSizeId';
+    document.body.appendChild(mapSizeElement);
+    //lowGroundLevel, highGroundLevel, lowClearance, highClearance 
   },
 
 
@@ -281,7 +321,7 @@ function calcMarkerDist(){
     let vec1 = new THREE.Vector3(markerPoints[1].geometry.attributes.position.array[0], markerPoints[1].geometry.attributes.position.array[1], markerPoints[1].geometry.attributes.position.array[2]);
     let dist = vec0.distanceTo(vec1);
     console.log("DIST: " + dist);
-    // document.getElementById("markerDist").innerHTML = "Distance: " + dist.toFixed(2) + "m";
+    document.getElementById("distanceId").innerHTML = "Distance: " + dist.toFixed(2) + "m";
   }
 }
 
