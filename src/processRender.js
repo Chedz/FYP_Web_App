@@ -1,11 +1,14 @@
 import * as Request from './request'
 import Delaunator from 'delaunator';
 import { ConvexGeometry } from "three/examples/jsm/geometries/ConvexGeometry"
+import * as Index from './index'
 var configJSON;
 var boundingSphereCenterMesh;
 var originPoint2d;
 let mapWidth;
 let mapHeight;
+var removableObjects = [];
+var existingMapName;
 
 export function getConfigJSON(){
   return configJSON;
@@ -16,7 +19,9 @@ export function getConfigJSON(){
 //   },10000)
 // }
 
-export async function renderAll(){
+export async function renderRecent(){
+    // processed = await Request.getFilesProcessedList();
+    // console.log(processed);
     configJSON = await Request.getYamlRecent();
     console.log(configJSON);
     // console.log(configJSON.free_thresh);
@@ -67,9 +72,71 @@ export async function renderAll(){
     // let bottom1dVertices = await get1dVertices(false);
 }
 
-async function get2dVertices(){
-    console.log('get2dVertices');
-    let rawInputData = await Request.get2dRecent();
+export async function renderSpecific(fileName){
+  // console.log(scene);
+  // Index.updateElements(existingMapName, fileName);
+  clearScene();
+  existingMapName = fileName;
+
+  // Index.updateElements(existingMapName, fileName, [bottom1dMinY, bottom1dMaxY, top1dMinY, top1dMaxY]);
+
+  configJSON = await Request.getYamlSpecific(fileName);
+  // console.log(configJSON);
+  // console.log(configJSON.free_thresh);
+  let free_thresh = configJSON.free_thresh;
+  let occupied_thresh = configJSON.occupied_thresh;
+  let mapResolution = configJSON.resolution;
+  let mapOrigin = configJSON.origin;
+  let averageDroneElevation = configJSON.averageElevation;
+  // console.log('maporigin')
+  // console.log(mapOrigin);
+
+  //  await render2dVertices(free_thresh, occupied_thresh, true, false, mapOrigin, averageDroneElevation);
+  // await render2dVertices(free_thresh, occupied_thresh, true, false, [-4.43, -9.63, 0.000000]);
+  //10.572565078735352, 0.05000000074505806 , 8.053475379943848
+
+  // 8.85 and 16.9 metres
+  //origin: [-4.419973, -7.269125, 0]
+  
+
+
+  let bottom1dVerticesData = await get1dVertices(false, fileName);
+  let bottom1dVertices = bottom1dVerticesData[0];
+  let bottom1dMinY = bottom1dVerticesData[1];
+  let bottom1dMaxY = bottom1dVerticesData[2];
+
+  // delaunayTriangulation(false, bottom1dVertices, -1 * mapOrigin[1], bottom1dMinY, -1 * mapOrigin[0] );
+  delaunayTriangulation(false, bottom1dVertices, 0, bottom1dMinY, 0 );
+
+  let top1dVerticesData = await get1dVertices(true, fileName);
+  let top1dVertices = top1dVerticesData[0];
+  let top1dMinY = top1dVerticesData[1];
+  let top1dMaxY = top1dVerticesData[2];
+
+  // delaunayTriangulation(true, top1dVertices, -1 * mapOrigin[1], bottom1dMinY, -1 * mapOrigin[0] );
+  delaunayTriangulation(true, top1dVertices, 0, bottom1dMinY, 0 );
+
+  let yOffset2dMap = averageDroneElevation - bottom1dMinY;
+  console.log(averageDroneElevation);
+  console.log(bottom1dMinY);
+  console.log(yOffset2dMap);
+
+  await render2dVertices(free_thresh, occupied_thresh, true, true, mapOrigin, yOffset2dMap, fileName);
+
+  Index.updateElements(existingMapName, fileName, [bottom1dMinY, bottom1dMaxY, top1dMinY, top1dMaxY]);
+
+  return existingMapName; //lowGroundLevel, highGroundLevel, lowClearance, highClearance 
+
+}
+
+async function get2dVertices(fileName = 'recent'){
+    // console.log('get2dVertices');
+    let rawInputData;
+    if(fileName == 'recent'){
+      rawInputData = await Request.get2dRecent();
+    } else {
+      rawInputData = await Request.get2dSpecific(fileName);
+    }
 
     var vertices = [];
     vertices = rawInputData.split("\n");  //split pgm.txt by row of pixels
@@ -102,7 +169,7 @@ async function get2dVertices(){
     return vertices;
 }
 
-async function render2dVertices(free_thresh, occupied_thresh, renderBorder, renderMultiBorder, mapOrigin, yOffset2dMap){
+async function render2dVertices(free_thresh, occupied_thresh, renderBorder, renderMultiBorder, mapOrigin, yOffset2dMap, fileName = 'recent'){
     // let xOffSet = (mapWidth * configJSON.resolution) - mapOrigin[0];
     // let zOffSet = (mapHeight * configJSON.resolution) - mapOrigin[1];
 
@@ -112,8 +179,8 @@ async function render2dVertices(free_thresh, occupied_thresh, renderBorder, rend
     // let zOffSet = 0;
 
 
-    console.log('render2dVertices');
-    let vertices = await get2dVertices();
+    // console.log('render2dVertices');
+    let vertices = await get2dVertices(fileName);
     // let xOffSet = -1 *((mapWidth * configJSON.resolution) + mapOrigin[0]);
     // let zOffSet = -1 *((mapHeight * configJSON.resolution) + mapOrigin[1]);
 
@@ -188,6 +255,7 @@ async function render2dVertices(free_thresh, occupied_thresh, renderBorder, rend
                 dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([vertices[i][2] + xOffSet, yValue-0.2 + (0.1 * j),vertices[i][1] - zOffset]), 3));
                 const dot = new THREE.Points(dotGeometry, dotMaterial);
                 scene.add(dot);
+                removableObjects.push(dot);
               }
             }else{
             let j = 1;
@@ -197,6 +265,7 @@ async function render2dVertices(free_thresh, occupied_thresh, renderBorder, rend
               dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([vertices[i][2] + xOffSet, yValue * j, vertices[i][1] - zOffset]), 3));
               const dot = new THREE.Points(dotGeometry, dotMaterial);
               scene.add(dot);
+              removableObjects.push(dot);
             }
           }
           
@@ -236,6 +305,7 @@ async function render2dVertices(free_thresh, occupied_thresh, renderBorder, rend
       new THREE.PointsMaterial({ color: 'cyan', size: 0.05 })
     );
     scene.add(cloud);
+    removableObjects.push(cloud);
     console.log(cloud);
     // cloud.position.set(0,35,0);
 
@@ -261,18 +331,30 @@ async function render2dVertices(free_thresh, occupied_thresh, renderBorder, rend
     // console.log(mesh.geometry.boundingSphere.center)
 
     scene.add(mesh);
+    removableObjects.push(mesh);
 
 
 }
 
-async function get1dVertices(topPoints, yOffset){
+async function get1dVertices(topPoints, fileName = 'recent'){
     let rawInputData;
 
-    if(topPoints){
-        rawInputData = await Request.get1d_1Recent(); //top data
-        //yOffset
-    }else{
-        rawInputData = await Request.get1d_0Recent(); //bottom data
+    if(fileName == 'recent'){
+    
+      if(topPoints){
+          rawInputData = await Request.get1d_1Recent(); //top data
+      }else{
+          rawInputData = await Request.get1d_0Recent(); //bottom data
+      }
+
+    } else {
+
+      if(topPoints){
+        rawInputData = await Request.get1d_1Specific(fileName); //top data
+      }else{
+        rawInputData = await Request.get1d_0Specific(fileName); //bottom data
+      }
+
     }
 
     var vertices = [];
@@ -336,6 +418,7 @@ function delaunayTriangulation(top, vertices, xOffSet, yOffset, zOffSet){
       new THREE.PointsMaterial({ color: 0x99ccff, size: 0.05 })
     );
     scene.add(cloud);
+    removableObjects.push(cloud);
     console.log(cloud);
     // cloud.position.set(0,35,0);
 
@@ -368,6 +451,7 @@ function delaunayTriangulation(top, vertices, xOffSet, yOffset, zOffSet){
     // console.log(mesh.geometry.boundingSphere.center)
 
     scene.add(mesh);
+    removableObjects.push(mesh);
     return mesh;
 
     // return obj.mesh.geometry.boundingSphere.center;
@@ -407,3 +491,15 @@ function delaunayTriangulation(top, vertices, xOffSet, yOffset, zOffSet){
 
 // first get yaml to json -> extract useful data
 // then get vertices from pgm and text files
+
+function clearScene(){
+  if( removableObjects.length > 0 ) {
+    removableObjects.forEach(function(v) {
+      v.material.dispose();
+      v.geometry.dispose();
+      scene.remove(v);
+    });
+    removableObjects = null;
+    removableObjects = [];
+  }
+}

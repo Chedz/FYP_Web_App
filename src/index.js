@@ -12,25 +12,129 @@ import { createCamera, createComposer, createRenderer, runApp } from "./core-uti
 import Tile from './assets/checker_tile.png'
 import Wood from './assets/wood_floor.jpeg'
 import Grass from './assets/grass.jpeg'
-import {renderAll, getConfigJSON} from './processRender'
+import {renderRecent, renderSpecific, getConfigJSON} from './processRender'
+import * as Request from './request'
 
 global.THREE = THREE
 
-/**************************************************
- * 0. Tweakable parameters for the scene
- *************************************************/
-const params = {
-  // general scene params
-  // speed: 1,
-  enableMarkerMeasurements: false,
-  renderOrigin: false,
-  // renderEmpty: true,
-  renderFloor: true,
-  // Bokeh pass properties
-  // focus: 0.0,
-  // aperture: 0,
-  // maxblur: 0.0
+// Request the list of processed maps
+var processedFilesList;
+
+// HTML elements
+var mapNameElement;
+var mapSizeElement;
+var distanceElement;
+var elevationElement;
+
+
+
+async function initGUI() {
+  processedFilesList = await Request.getFilesProcessedList();
+  // console.log(processedFilesList);
+
+  const params = {
+    // general scene params
+    // speed: 1,
+    enableMarkerMeasurements: false,
+    renderOrigin: false,
+    // renderEmpty: true,
+    renderFloor: true,
+  }
+
+  // GUI controls
+  const gui = new dat.GUI()
+  // gui.width = 300;
+
+  // gui.add(params, "speed", 1, 10, 0.5)
+  // gui.add(params, "lightOneSwitch").name('Red light').onChange((val) => {
+  //   rectLight1.intensity = val ? 5 : 0
+  // })
+  // gui.add(params, "lightTwoSwitch").name('Green light').onChange((val) => {
+  //   rectLight2.intensity = val ? 5 : 0
+  // })
+  // gui.add(params, "lightThreeSwitch").name('Blue light').onChange((val) => {
+  //   rectLight3.intensity = val ? 5 : 0
+  // })
+
+  dotMaterial = new THREE.PointsMaterial({ size: 0.5, color: 0xFFFF00 }); //border
+  const dotGeometry = new THREE.BufferGeometry();
+  dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0.15, 0]), 3));
+  originPoint = new THREE.Points(dotGeometry, dotMaterial);
+  originPoint.visible = false;
+  scene.add(originPoint);
+
+  gui.add(params, "enableMarkerMeasurements").name('Measure').onChange((val) => {
+    enableMarkerMeasurements = val ? true : false
+  });
+  gui.add(params, "renderOrigin").name('Show Origin').onChange((val) => {
+    originPoint.visible = val ? true : false
+  });
+  // gui.add(params, "renderEmpty").name('Render Empty').onChange((val) => {
+  //   renderEmpty = val ? true : false
+  // });
+  gui.add(params, "renderFloor").name('Render Floor').onChange((val) => {
+    mshStdFloor.visible = val ? true : false
+  });
+  
+
+  let mapFolder = gui.addFolder(`Map`)
+  // processedFilesList.forEach((file) => {
+  //   params[file] = false;
+  //   params[processedFilesList[processedFilesList.length]] = true;
+  //   mapFolder.add(params, file).name(file).onChange((val) => {
+  //     if (val) {
+  //       // renderAll(file);
+  //       console.log(file);
+  //     }
+  //   });
+  // });
+
+  for (let index = 0; index < processedFilesList.length; index++) {
+    const file = processedFilesList[index];
+
+    // if(index == processedFilesList.length - 1) params[file] = true;
+    // else params[file] = false;
+
+    // if(index == processedFilesList.length - 1)
+     params[file] = function() {
+      //remove distance marker points from the scene
+      markerPoints.forEach((point) => {
+        point.geometry.dispose();
+        point.material.dispose();
+        scene.remove(point);
+      });
+      markerPoints = [];
+      renderSpecific(file);
+    };
+    // else params[file] = false;
+
+    // params[file] = false;
+    // params[processedFilesList[processedFilesList.length]] = true;
+    mapFolder.add(params, file);
+
+    // console.log(mapFolder);
+    // console.log(params);
+    
+  }
 }
+
+
+// /**************************************************
+//  * 0. Tweakable parameters for the scene
+//  *************************************************/
+// const params = {
+//   // general scene params
+//   // speed: 1,
+//   enableMarkerMeasurements: false,
+//   renderOrigin: false,
+//   // renderEmpty: true,
+//   renderFloor: true,
+//   // Bokeh pass properties
+//   focus: 0.0,
+//   aperture: 0,
+//   maxblur: 0.0
+// }
+
 
 var renderFloor = true;
 const pointer = new THREE.Vector2();
@@ -63,17 +167,17 @@ let renderer = createRenderer({ antialias: true }, (_renderer) => {
 // Pass in fov, near, far and camera position respectively
 let camera = createCamera(45, 1, 1000, { x: 0, y: 5, z: -15 })
 
-// (Optional) Create the EffectComposer and passes for post-processing
-// If you don't need post-processing, just comment/delete the following creation code, and skip passing any composer to 'runApp' at the bottom
-let bokehPass = new BokehPass(scene, camera, {
-  focus: 0.0,
-  aperture: 0.0,
-  maxblur: 0.0
-})
+// // (Optional) Create the EffectComposer and passes for post-processing
+// // If you don't need post-processing, just comment/delete the following creation code, and skip passing any composer to 'runApp' at the bottom
+// let bokehPass = new BokehPass(scene, camera, {
+//   focus: 0.0,
+//   aperture: 0.0,
+//   maxblur: 0.0
+// })
 // The RenderPass is already created in 'createComposer'
-let composer = createComposer(renderer, scene, camera, (comp) => {
-  comp.addPass(bokehPass)
-})
+// let composer = createComposer(renderer, scene, camera, (comp) => {
+//   comp.addPass(bokehPass)
+// })
 
 /**************************************************
  * 2. Build your scene in this threejs app
@@ -83,6 +187,8 @@ let composer = createComposer(renderer, scene, camera, (comp) => {
  *************************************************/
 let app = {
   async initScene() {
+    // processedFilesList = await Request.getFilesProcessedList();
+    // console.log(processedFilesList);
     // OrbitControls
     this.controls = new OrbitControls(camera, renderer.domElement)
     this.controls.enableDamping = true;
@@ -117,51 +223,51 @@ let app = {
     this.controls.target.copy(this.meshKnot.position)
     //scene.add(this.meshKnot)
 
-    // GUI controls
-    const gui = new dat.GUI()
+    // // GUI controls
+    // const gui = new dat.GUI()
 
-    // gui.add(params, "speed", 1, 10, 0.5)
-    // gui.add(params, "lightOneSwitch").name('Red light').onChange((val) => {
-    //   rectLight1.intensity = val ? 5 : 0
-    // })
-    // gui.add(params, "lightTwoSwitch").name('Green light').onChange((val) => {
-    //   rectLight2.intensity = val ? 5 : 0
-    // })
-    // gui.add(params, "lightThreeSwitch").name('Blue light').onChange((val) => {
-    //   rectLight3.intensity = val ? 5 : 0
-    // })
+    // // gui.add(params, "speed", 1, 10, 0.5)
+    // // gui.add(params, "lightOneSwitch").name('Red light').onChange((val) => {
+    // //   rectLight1.intensity = val ? 5 : 0
+    // // })
+    // // gui.add(params, "lightTwoSwitch").name('Green light').onChange((val) => {
+    // //   rectLight2.intensity = val ? 5 : 0
+    // // })
+    // // gui.add(params, "lightThreeSwitch").name('Blue light').onChange((val) => {
+    // //   rectLight3.intensity = val ? 5 : 0
+    // // })
 
-    dotMaterial = new THREE.PointsMaterial({ size: 0.5, color: 0xFFFF00 }); //border
-    const dotGeometry = new THREE.BufferGeometry();
-    dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0.15, 0]), 3));
-    originPoint = new THREE.Points(dotGeometry, dotMaterial);
-    originPoint.visible = false;
-    scene.add(originPoint);
+    // dotMaterial = new THREE.PointsMaterial({ size: 0.5, color: 0xFFFF00 }); //border
+    // const dotGeometry = new THREE.BufferGeometry();
+    // dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0.15, 0]), 3));
+    // originPoint = new THREE.Points(dotGeometry, dotMaterial);
+    // originPoint.visible = false;
+    // scene.add(originPoint);
 
-    gui.add(params, "enableMarkerMeasurements").name('Measure').onChange((val) => {
-      enableMarkerMeasurements = val ? true : false
-    });
-    gui.add(params, "renderOrigin").name('Show Origin').onChange((val) => {
-      originPoint.visible = val ? true : false
-    });
-    // gui.add(params, "renderEmpty").name('Render Empty').onChange((val) => {
-    //   renderEmpty = val ? true : false
+    // gui.add(params, "enableMarkerMeasurements").name('Measure').onChange((val) => {
+    //   enableMarkerMeasurements = val ? true : false
     // });
-    gui.add(params, "renderFloor").name('Render Floor').onChange((val) => {
-      mshStdFloor.visible = val ? true : false
-    });
+    // gui.add(params, "renderOrigin").name('Show Origin').onChange((val) => {
+    //   originPoint.visible = val ? true : false
+    // });
+    // // gui.add(params, "renderEmpty").name('Render Empty').onChange((val) => {
+    // //   renderEmpty = val ? true : false
+    // // });
+    // gui.add(params, "renderFloor").name('Render Floor').onChange((val) => {
+    //   mshStdFloor.visible = val ? true : false
+    // });
     
 
-    // const matChanger = () => {
+    // const mapChanger = () => {
     //   bokehPass.uniforms['focus'].value = params.focus
     //   bokehPass.uniforms['aperture'].value = params.aperture * 0.00001
     //   bokehPass.uniforms['maxblur'].value = params.maxblur
     // }
 
     // let bokehFolder = gui.addFolder(`Bokeh Pass`)
-    // bokehFolder.add(params, 'focus', 0.0, 3000.0, 10).onChange(matChanger)
-    // bokehFolder.add(params, 'aperture', 0, 10, 0.1).onChange(matChanger)
-    // bokehFolder.add(params, 'maxblur', 0.0, 0.01, 0.001).onChange(matChanger)
+    // bokehFolder.add(params, 'focus', 0.0, 3000.0, 10).onChange(mapChanger)
+    // bokehFolder.add(params, 'aperture', 0, 10, 0.1).onChange(mapChanger)
+    // bokehFolder.add(params, 'maxblur', 0.0, 0.01, 0.001).onChange(mapChanger)
 
     // Stats - show fps
     this.stats1 = new Stats()
@@ -170,7 +276,7 @@ let app = {
     // this.container is the parent DOM element of the threejs canvas element
     this.container.appendChild(this.stats1.domElement)
 
-    let maxMinYValues = await renderAll(); //lowGroundLevel, highGroundLevel, lowClearance, highClearance 
+    let maxMinYValues = await renderRecent(); //lowGroundLevel, highGroundLevel, lowClearance, highClearance 
     var origin = getConfigJSON().origin;
     // console.log(getConfigJSON);
     //this.controls.target.set(-origin[0], 0, -origin[1]);
@@ -193,24 +299,26 @@ let app = {
 
     raycaster = new THREE.Raycaster();
 		raycaster.params.Points.threshold = 0.1;
+
+    //Event Listeners
     window.addEventListener( 'resize', onWindowResize );
     document.addEventListener( 'pointermove', onPointerMove );
     document.addEventListener( 'click', onLeftClick );
     document.addEventListener( 'contextmenu', onRightClick );
     document.addEventListener( 'keydown', onKeyPress );
-    const elevationElement = document.createElement('div');
+
+    // HTML elements overlay
+    elevationElement = document.createElement('div');
     elevationElement.style.position = 'absolute';
     elevationElement.style.top = '10px';
     elevationElement.style.left = '100px';
     elevationElement.style.color = 'white';
     elevationElement.style.font = 'normal 18px Arial';
     elevationElement.id = 'valueId';
-    // set an initial value
     elevationElement.innerText = 'Elevation:';
-    // append the element to the body
     document.body.appendChild(elevationElement);
 
-    const distanceElement = document.createElement('div');
+    distanceElement = document.createElement('div');
     distanceElement.style.position = 'absolute';
     distanceElement.style.top = '35px';
     distanceElement.style.left = '100px';
@@ -220,7 +328,7 @@ let app = {
     distanceElement.id = 'distanceId';
     document.body.appendChild(distanceElement);
 
-    const mapNameElement = document.createElement('div');
+    mapNameElement = document.createElement('div');
     mapNameElement.style.position = 'absolute';
     mapNameElement.style.top = '10px';
     mapNameElement.style.left = '280px';
@@ -230,9 +338,7 @@ let app = {
     mapNameElement.id = 'mapNameId';
     document.body.appendChild(mapNameElement);
 
-    console.log(maxMinYValues)
-
-    const mapSizeElement = document.createElement('div');
+    mapSizeElement = document.createElement('div');
     mapSizeElement.style.position = 'absolute';
     mapSizeElement.style.top = '35px';
     mapSizeElement.style.left = '280px';
@@ -371,6 +477,15 @@ function onWindowResize() {
 
 }
 
+export function updateElements(existingMapName, newMapName, maxMinYValues) {
+  console.log("updateElements");
+
+  mapNameElement.innerText = 'Map Name: ' + newMapName;
+  elevationElement.innerText = 'Elevation:';
+  distanceElement.innerText = 'Distance:';
+  mapSizeElement.innerText = 'Min/Max Clearance: ' + (maxMinYValues[2] - maxMinYValues[0]).toFixed(2) + 'm , ' + (maxMinYValues[3] - maxMinYValues[0]).toFixed(2) + 'm';
+}
+
 /**************************************************
  * 3. Run the app
  * 'runApp' will do most of the boilerplate setup code for you:
@@ -379,5 +494,6 @@ function onWindowResize() {
  * ps. if you don't use custom shaders, pass undefined to the 'uniforms'(2nd-last) param
  * ps. if you don't use post-processing, pass undefined to the 'composer'(last) param
  *************************************************/
-runApp(app, scene, renderer, camera, true, undefined, composer)
+initGUI();
+runApp(app, scene, renderer, camera, true, undefined);
 
