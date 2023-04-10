@@ -3,7 +3,7 @@ import * as THREE from "three"
 import * as dat from 'dat.gui'
 import Stats from "three/examples/jsm/libs/stats.module"
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls"
-import { BokehPass } from "three/examples/jsm/postprocessing/BokehPass"
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 
 // Core boilerplate code deps
 import { createCamera, createComposer, createRenderer, runApp } from "./core-utils"
@@ -12,8 +12,10 @@ import { createCamera, createComposer, createRenderer, runApp } from "./core-uti
 import Tile from './assets/checker_tile.png'
 import Wood from './assets/wood_floor.jpeg'
 import Grass from './assets/grass.jpeg'
-import {renderRecent, renderSpecific, getConfigJSON} from './processRender'
+import {renderRecent, renderSpecific, getConfigJSON, toggleMapVisibility} from './processRender'
 import * as Request from './request'
+//import glbModelUrl from './glbModels/abandoned_warehouse_interior.glb'
+// import TV from './assets/TELEVISION.glb'
 
 global.THREE = THREE
 
@@ -26,6 +28,10 @@ var mapSizeElement;
 var distanceElement;
 var elevationElement;
 
+// 3d model meshs
+var tvMesh;
+var warehouseMesh;
+var axesHelper;
 
 
 async function initGUI() {
@@ -39,6 +45,9 @@ async function initGUI() {
     renderOrigin: false,
     // renderEmpty: true,
     renderFloor: true,
+    renderTv: false,
+    renderWarehouse: false,
+    renderMap: true,
   }
 
   // GUI controls
@@ -56,28 +65,53 @@ async function initGUI() {
   //   rectLight3.intensity = val ? 5 : 0
   // })
 
-  dotMaterial = new THREE.PointsMaterial({ size: 0.5, color: 0xFFFF00 }); //border
-  const dotGeometry = new THREE.BufferGeometry();
-  dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0.15, 0]), 3));
-  originPoint = new THREE.Points(dotGeometry, dotMaterial);
-  originPoint.visible = false;
-  scene.add(originPoint);
+  // dotMaterial = new THREE.PointsMaterial({ size: 0.5, color: 0xFFFF00 }); //border
+  // const dotGeometry = new THREE.BufferGeometry();
+  // dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0.15, 0]), 3));
+  // originPoint = new THREE.Points(dotGeometry, dotMaterial);
+  // originPoint.visible = false;
+  // scene.add(originPoint);
+
+  axesHelper = new THREE.AxesHelper( 20 );
+  axesHelper.visible = false;
+  scene.add( axesHelper );
+  
 
   gui.add(params, "enableMarkerMeasurements").name('Measure').onChange((val) => {
     enableMarkerMeasurements = val ? true : false
   });
-  gui.add(params, "renderOrigin").name('Show Origin').onChange((val) => {
-    originPoint.visible = val ? true : false
+
+  let toggleVisbilityFolder = gui.addFolder(`Visible`);
+
+  toggleVisbilityFolder.add(params, "renderMap").name('Map').onChange((val) => {
+    toggleMapVisibility(val);
   });
-  // gui.add(params, "renderEmpty").name('Render Empty').onChange((val) => {
-  //   renderEmpty = val ? true : false
+
+  toggleVisbilityFolder.add(params, "renderOrigin").name('Map Origin').onChange((val) => {
+    axesHelper.visible = val ? true : false
+  });
+
+  // gui.add(params, "renderOrigin").name('Show Origin').onChange((val) => {
+  //   originPoint.visible = val ? true : false
   // });
-  gui.add(params, "renderFloor").name('Render Floor').onChange((val) => {
+
+  toggleVisbilityFolder.add(params, "renderFloor").name('Render Floor').onChange((val) => {
     mshStdFloor.visible = val ? true : false
+  });
+  toggleVisbilityFolder.add(params, "renderTv").name('TV').onChange((val) => {
+    tvMesh.visible = val ? true : false
+  });
+  toggleVisbilityFolder.add(params, "renderWarehouse").name('Warehouse').onChange((val) => {
+    warehouseMesh.visible = val ? true : false
   });
   
 
-  let mapFolder = gui.addFolder(`Map`)
+  let mapFolder = gui.addFolder(`Map`);
+
+  // toggleVisbilityFolder.add(params, "renderRecent").name('Map').onChange((val) => {
+  //   toggleMapVisibility(false);
+  // });
+
   // processedFilesList.forEach((file) => {
   //   params[file] = false;
   //   params[processedFilesList[processedFilesList.length]] = true;
@@ -221,53 +255,6 @@ let app = {
     this.meshKnot.position.set(0, 5, 0)
     // update orbit controls to target meshKnot at center
     this.controls.target.copy(this.meshKnot.position)
-    //scene.add(this.meshKnot)
-
-    // // GUI controls
-    // const gui = new dat.GUI()
-
-    // // gui.add(params, "speed", 1, 10, 0.5)
-    // // gui.add(params, "lightOneSwitch").name('Red light').onChange((val) => {
-    // //   rectLight1.intensity = val ? 5 : 0
-    // // })
-    // // gui.add(params, "lightTwoSwitch").name('Green light').onChange((val) => {
-    // //   rectLight2.intensity = val ? 5 : 0
-    // // })
-    // // gui.add(params, "lightThreeSwitch").name('Blue light').onChange((val) => {
-    // //   rectLight3.intensity = val ? 5 : 0
-    // // })
-
-    // dotMaterial = new THREE.PointsMaterial({ size: 0.5, color: 0xFFFF00 }); //border
-    // const dotGeometry = new THREE.BufferGeometry();
-    // dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0.15, 0]), 3));
-    // originPoint = new THREE.Points(dotGeometry, dotMaterial);
-    // originPoint.visible = false;
-    // scene.add(originPoint);
-
-    // gui.add(params, "enableMarkerMeasurements").name('Measure').onChange((val) => {
-    //   enableMarkerMeasurements = val ? true : false
-    // });
-    // gui.add(params, "renderOrigin").name('Show Origin').onChange((val) => {
-    //   originPoint.visible = val ? true : false
-    // });
-    // // gui.add(params, "renderEmpty").name('Render Empty').onChange((val) => {
-    // //   renderEmpty = val ? true : false
-    // // });
-    // gui.add(params, "renderFloor").name('Render Floor').onChange((val) => {
-    //   mshStdFloor.visible = val ? true : false
-    // });
-    
-
-    // const mapChanger = () => {
-    //   bokehPass.uniforms['focus'].value = params.focus
-    //   bokehPass.uniforms['aperture'].value = params.aperture * 0.00001
-    //   bokehPass.uniforms['maxblur'].value = params.maxblur
-    // }
-
-    // let bokehFolder = gui.addFolder(`Bokeh Pass`)
-    // bokehFolder.add(params, 'focus', 0.0, 3000.0, 10).onChange(mapChanger)
-    // bokehFolder.add(params, 'aperture', 0, 10, 0.1).onChange(mapChanger)
-    // bokehFolder.add(params, 'maxblur', 0.0, 0.01, 0.001).onChange(mapChanger)
 
     // Stats - show fps
     this.stats1 = new Stats()
@@ -281,21 +268,6 @@ let app = {
     // console.log(getConfigJSON);
     //this.controls.target.set(-origin[0], 0, -origin[1]);
     this.controls.target.set(0,0,0);
-
-    // dotMaterial = new THREE.PointsMaterial({ size: 0.5, color: 0xFFFF00 }); //border
-    // const dotGeometry = new THREE.BufferGeometry();
-    // dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0.5, 0]), 3));
-    // const dot = new THREE.Points(dotGeometry, dotMaterial);
-    // scene.add(dot);
-
-    // -4.419973, -7.269125,  //The 2-D pose of the lower-left pixel in the map -> origin
-
-
-    //15.4, 5.300000000000001 origin pixel in pgm value
-
-
-    //-10.572565078735352, 0.05000000074505806 , 8.053475379943848 //where orgin should be in 3d space
-
 
     raycaster = new THREE.Raycaster();
 		raycaster.params.Points.threshold = 0.1;
@@ -486,6 +458,41 @@ export function updateElements(existingMapName, newMapName, maxMinYValues) {
   mapSizeElement.innerText = 'Min/Max Clearance: ' + (maxMinYValues[2] - maxMinYValues[0]).toFixed(2) + 'm , ' + (maxMinYValues[3] - maxMinYValues[0]).toFixed(2) + 'm';
 }
 
+function loadAddGLBModels(){
+  // Instantiate a loader
+  const loader = new GLTFLoader();
+  const tvUrl = new URL('./glbModels/TELEVISION.glb', import.meta.url);
+  const warehouseUrl = new URL('./glbModels/abandoned_warehouse_interior.glb', import.meta.url);
+
+
+  loader.load(tvUrl+"/", function(gltf) {
+      console.log(gltf);
+      tvMesh = gltf.scene;
+      tvMesh.position.set(0, 1, 0);
+      tvMesh.scale.set(1.5, 1.5, 1.5);
+      tvMesh.visible = false;
+
+      scene.add(tvMesh);
+  }, function(xhr) {
+      // console.log(xhr.loaded/xhr.total * 100);
+  },function(error) {
+      console.log(error);
+  });
+
+  loader.load(warehouseUrl+"/", function(gltf) {
+    console.log(gltf);
+    warehouseMesh = gltf.scene;
+    warehouseMesh.position.set(0, 2.9, 0);
+    warehouseMesh.visible = false;
+
+    scene.add(warehouseMesh);
+  }, function(xhr) {
+    // console.log(xhr.loaded/xhr.total * 100);
+  },function(error) {
+    console.log(error);
+  });
+}
+
 /**************************************************
  * 3. Run the app
  * 'runApp' will do most of the boilerplate setup code for you:
@@ -495,5 +502,6 @@ export function updateElements(existingMapName, newMapName, maxMinYValues) {
  * ps. if you don't use post-processing, pass undefined to the 'composer'(last) param
  *************************************************/
 initGUI();
+loadAddGLBModels();
 runApp(app, scene, renderer, camera, true, undefined);
 

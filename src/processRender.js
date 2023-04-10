@@ -503,3 +503,9 @@ function clearScene(){
     removableObjects = [];
   }
 }
+
+export function toggleMapVisibility(toggleVal){
+  removableObjects.forEach(function(v) {
+    v.visible = toggleVal;
+  });
+}
