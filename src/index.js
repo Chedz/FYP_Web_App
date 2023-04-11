@@ -12,7 +12,7 @@ import { createCamera, createComposer, createRenderer, runApp } from "./core-uti
 import Tile from './assets/checker_tile.png'
 import Wood from './assets/wood_floor.jpeg'
 import Grass from './assets/grass.jpeg'
-import {renderRecent, renderSpecific, getConfigJSON, toggleMapVisibility} from './processRender'
+import {renderRecent, renderSpecific, getConfigJSON, toggleMapVisibility, toggleMapOutlineVisibility} from './processRender'
 import * as Request from './request'
 //import glbModelUrl from './glbModels/abandoned_warehouse_interior.glb'
 // import TV from './assets/TELEVISION.glb'
@@ -48,6 +48,7 @@ async function initGUI() {
     renderTv: false,
     renderWarehouse: false,
     renderMap: true,
+    render2d: true,
   }
 
   // GUI controls
@@ -83,8 +84,12 @@ async function initGUI() {
 
   let toggleVisbilityFolder = gui.addFolder(`Visible`);
 
-  toggleVisbilityFolder.add(params, "renderMap").name('Map').onChange((val) => {
+  toggleVisbilityFolder.add(params, "renderMap").name('Map Mesh').onChange((val) => {
     toggleMapVisibility(val);
+  });
+
+  toggleVisbilityFolder.add(params, "render2d").name('Map Border').onChange((val) => {
+    toggleMapOutlineVisibility(val);
   });
 
   toggleVisbilityFolder.add(params, "renderOrigin").name('Map Origin').onChange((val) => {

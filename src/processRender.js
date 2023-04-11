@@ -9,6 +9,7 @@ let mapWidth;
 let mapHeight;
 var removableObjects = [];
 var existingMapName;
+var points2dOutline = [];
 
 export function getConfigJSON(){
   return configJSON;
@@ -19,7 +20,7 @@ export function getConfigJSON(){
 //   },10000)
 // }
 
-export async function renderRecent(){
+export async function renderRecent(normaliseYvalues = true){
     // processed = await Request.getFilesProcessedList();
     // console.log(processed);
     configJSON = await Request.getYamlRecent();
@@ -46,22 +47,46 @@ export async function renderRecent(){
     let bottom1dVertices = bottom1dVerticesData[0];
     let bottom1dMinY = bottom1dVerticesData[1];
     let bottom1dMaxY = bottom1dVerticesData[2];
+    let bottom1dAverageY = bottom1dVerticesData[3];
 
     // delaunayTriangulation(false, bottom1dVertices, -1 * mapOrigin[1], bottom1dMinY, -1 * mapOrigin[0] );
-    delaunayTriangulation(false, bottom1dVertices, 0, bottom1dMinY, 0 );
+    // delaunayTriangulation(false, bottom1dVertices, 0, bottom1dMinY, 0 );
 
     let top1dVerticesData = await get1dVertices(true);
     let top1dVertices = top1dVerticesData[0];
     let top1dMinY = top1dVerticesData[1];
     let top1dMaxY = top1dVerticesData[2];
+    let top1dAverageY = top1dVerticesData[3];
+
+    // console.log('normalise y vals: ');
+    // console.log(top1dMinY);
+    // console.log(top1dMaxY);
+    // console.log(bottom1dMinY);
+    // console.log(bottom1dMaxY);
 
     // delaunayTriangulation(true, top1dVertices, -1 * mapOrigin[1], bottom1dMinY, -1 * mapOrigin[0] );
-    delaunayTriangulation(true, top1dVertices, 0, bottom1dMinY, 0 );
+
+    // delaunayTriangulation(false, bottom1dVertices, 0, bottom1dMinY, 0 );
+    // delaunayTriangulation(true, top1dVertices, 0, bottom1dMinY, 0 );
+
+
+    // delaunayTriangulation(true, top1dVertices, 0, bottom1dMinY, 0, bottom1dAverageY, top1dAverageY );
+    // delaunayTriangulation(false, bottom1dVertices, 0, bottom1dMinY, 0, bottom1dAverageY, top1dAverageY );
+
+    //delaunayTriangulation(false, bottom1dVertices, 0, bottom1dMinY, 0, bottom1dAverageY, top1dAverageY );
+
+    let yDiffList = [];
+    yDiffList = delaunayTriangulation(true, top1dVertices, 0, bottom1dMinY, 0, bottom1dAverageY, top1dAverageY, normaliseYvalues );
+
+    // console.log(yDiffList.length);
+
+    delaunayTriangulation(false, bottom1dVertices, 0, bottom1dMinY, 0, bottom1dAverageY, top1dAverageY, normaliseYvalues, yDiffList );
+    // delaunayTriangulation(true, top1dVertices, 0, bottom1dMinY, 0, bottom1dAverageY, top1dAverageY );
 
     let yOffset2dMap = averageDroneElevation - bottom1dMinY;
-    console.log(averageDroneElevation);
-    console.log(bottom1dMinY);
-    console.log(yOffset2dMap);
+    // console.log(averageDroneElevation);
+    // console.log(bottom1dMinY);
+    // console.log(yOffset2dMap);
 
     await render2dVertices(free_thresh, occupied_thresh, true, true, mapOrigin, yOffset2dMap);
 
@@ -72,7 +97,7 @@ export async function renderRecent(){
     // let bottom1dVertices = await get1dVertices(false);
 }
 
-export async function renderSpecific(fileName){
+export async function renderSpecific(fileName, normaliseYvalues = false){
   // console.log(scene);
   // Index.updateElements(existingMapName, fileName);
   clearScene();
@@ -104,17 +129,28 @@ export async function renderSpecific(fileName){
   let bottom1dVertices = bottom1dVerticesData[0];
   let bottom1dMinY = bottom1dVerticesData[1];
   let bottom1dMaxY = bottom1dVerticesData[2];
+  let bottom1dAverageY = bottom1dVerticesData[3];
 
   // delaunayTriangulation(false, bottom1dVertices, -1 * mapOrigin[1], bottom1dMinY, -1 * mapOrigin[0] );
-  delaunayTriangulation(false, bottom1dVertices, 0, bottom1dMinY, 0 );
+  // delaunayTriangulation(false, bottom1dVertices, 0, bottom1dMinY, 0 );
 
   let top1dVerticesData = await get1dVertices(true, fileName);
   let top1dVertices = top1dVerticesData[0];
   let top1dMinY = top1dVerticesData[1];
   let top1dMaxY = top1dVerticesData[2];
+  let top1dAverageY = top1dVerticesData[3];
 
   // delaunayTriangulation(true, top1dVertices, -1 * mapOrigin[1], bottom1dMinY, -1 * mapOrigin[0] );
-  delaunayTriangulation(true, top1dVertices, 0, bottom1dMinY, 0 );
+
+  // let yDiffList = delaunayTriangulation(false, bottom1dVertices, 0, bottom1dMinY, 0, bottom1dAverageY, top1dAverageY );
+  // delaunayTriangulation(true, top1dVertices, 0, bottom1dMinY, 0, bottom1dAverageY, top1dAverageY, yDiffList );
+
+  let yDiffList = [];
+  yDiffList = delaunayTriangulation(true, top1dVertices, 0, bottom1dMinY, 0, bottom1dAverageY, top1dAverageY, normaliseYvalues );
+
+  // console.log(yDiffList.length);
+
+  delaunayTriangulation(false, bottom1dVertices, 0, bottom1dMinY, 0, bottom1dAverageY, top1dAverageY, normaliseYvalues, yDiffList );
 
   let yOffset2dMap = averageDroneElevation - bottom1dMinY;
   console.log(averageDroneElevation);
@@ -255,7 +291,8 @@ async function render2dVertices(free_thresh, occupied_thresh, renderBorder, rend
                 dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([vertices[i][2] + xOffSet, yValue-0.2 + (0.1 * j),vertices[i][1] - zOffset]), 3));
                 const dot = new THREE.Points(dotGeometry, dotMaterial);
                 scene.add(dot);
-                removableObjects.push(dot);
+                points2dOutline.push(dot);
+                // removableObjects.push(dot);
               }
             }else{
             let j = 1;
@@ -265,6 +302,7 @@ async function render2dVertices(free_thresh, occupied_thresh, renderBorder, rend
               dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([vertices[i][2] + xOffSet, yValue * j, vertices[i][1] - zOffset]), 3));
               const dot = new THREE.Points(dotGeometry, dotMaterial);
               scene.add(dot);
+              // points2dOutline.push(dot);
               removableObjects.push(dot);
             }
           }
@@ -338,6 +376,7 @@ async function render2dVertices(free_thresh, occupied_thresh, renderBorder, rend
 
 async function get1dVertices(topPoints, fileName = 'recent'){
     let rawInputData;
+    let averageYCounter = 0;
 
     if(fileName == 'recent'){
     
@@ -363,16 +402,18 @@ async function get1dVertices(topPoints, fileName = 'recent'){
     var maxYvalue = 0;
     var minYvalue = 100000;
 
-    for (var i = 0; i < vertices.length; i++) { //
+    for (var i = 0; i < vertices.length; i++) { // each line of data (x,y,z)
       //vertices[i] = parseFloat(vertices[i]);
       var tempArr; 
       tempArr = vertices[i].split(" , ");
-      for (var j = 0; j < tempArr.length; j++) {
+      for (var j = 0; j < tempArr.length; j++) { //each axis per vertex
 
-        if(tempArr[j] == null) break;
-        tempArr[j] = parseFloat(tempArr[j]);
+        if(tempArr[j] == null) break; //skip null values
+        tempArr[j] = parseFloat(tempArr[j]);  //convert to float
 
-        if (j == 1) {
+        if (j == 1) { //y axis
+          averageYCounter += tempArr[j];  //add to average counter
+
           if (tempArr[j] > maxYvalue) {
             maxYvalue = tempArr[j];
           }
@@ -388,16 +429,33 @@ async function get1dVertices(topPoints, fileName = 'recent'){
 
     // var yOffset = minYvalue; //43; //0.8
 
+    var averageY = averageYCounter / vertices.length;
+    console.log('averageY', averageY);
+
     console.log('maxYvalue', maxYvalue);
-    return [vertices, minYvalue, maxYvalue];
+    return [vertices, minYvalue, maxYvalue, averageY];
 }
 
 
-function delaunayTriangulation(top, vertices, xOffSet, yOffset, zOffSet){
+function delaunayTriangulation(top, vertices, xOffSet, yOffset, zOffSet, bottom1dAverageY, top1dAverageY, normaliseYvalues = false, yDiffList){
 
     var points3d = [];
-    console.log("vertices", vertices.length);
-    console.log("yOffset", yOffset);
+    let yOffsetList = [];
+    if(normaliseYvalues){
+      if(!top){
+        yOffsetList = yDiffList;
+      }else{
+        yOffsetList = [];
+      }
+    }
+
+    // let yOffsetList = [];
+    // console.log('yDiffList: ' + yOffsetList.length);
+
+    // if(!top) yOffsetList = yDiffList;
+    // var yDiffList = [];
+    // console.log("vertices", vertices.length);
+    // console.log("yOffset", yOffset);
 
     for (let index = 0; index < vertices.length; index++) {
       if(vertices[index][0] == null || vertices[index][1] == null || vertices[index][2] == null){
@@ -410,6 +468,32 @@ function delaunayTriangulation(top, vertices, xOffSet, yOffset, zOffSet){
         points3d.push(new THREE.Vector3(zOffSet + vertices[index][0], vertices[index][1] - yOffset, xOffSet - vertices[index][2]));
       }
       //zOffSet + (vertices[i][0] ) , vertices[i][1] - yOffset, xOffSet - (vertices[i][2] )
+    }
+
+   
+    if(normaliseYvalues){
+      if(top){ //if top points then normalise to top1dAverageY
+        for (let point = 0; point < points3d.length; point++) {
+          const element = points3d[point];
+
+          let normalisedTopAverageY = top1dAverageY - yOffset;
+          let yDiff = element.y - normalisedTopAverageY;
+
+          yOffsetList.push(yDiff);
+          element.y = normalisedTopAverageY;
+        }
+        console.log('yOffsetList', yOffsetList.length);
+        console.log(yOffsetList);
+
+      }else{ //if bottom points then normalise to bottom1dAverageY
+        console.log('yDiffList', yOffsetList.length);
+        console.log('point3d', points3d.length);
+
+        for (let point = 0; point < points3d.length; point++) {
+            const element = points3d[point];
+            element.y -= yDiffList[point];
+        }
+      }
     }
 
     var geom = new THREE.BufferGeometry().setFromPoints(points3d);
@@ -452,7 +536,10 @@ function delaunayTriangulation(top, vertices, xOffSet, yOffset, zOffSet){
 
     scene.add(mesh);
     removableObjects.push(mesh);
-    return mesh;
+
+    console.log(yOffsetList.length);
+    // return mesh;
+    return yOffsetList;
 
     // return obj.mesh.geometry.boundingSphere.center;
     // mesh.position.set(0,35,0);
@@ -502,10 +589,25 @@ function clearScene(){
     removableObjects = null;
     removableObjects = [];
   }
+  if( points2dOutline.length > 0 ) {
+    points2dOutline.forEach(function(v) {
+      v.material.dispose();
+      v.geometry.dispose();
+      scene.remove(v);
+    });
+    points2dOutline = null;
+    points2dOutline = [];
+  }
 }
 
 export function toggleMapVisibility(toggleVal){
-  removableObjects.forEach(function(v) {
-    v.visible = toggleVal;
-  });
+    removableObjects.forEach(function(v) {
+      v.visible = toggleVal;
+    });
+}
+
+export function toggleMapOutlineVisibility(toggleVal){
+    points2dOutline.forEach(function(v) {
+      v.visible = toggleVal;
+    });
 }
