@@ -14,8 +14,6 @@ import Wood from './assets/wood_floor.jpeg'
 import Grass from './assets/grass.jpeg'
 import {renderRecent, renderSpecific, getConfigJSON, toggleMapVisibility, toggleMapOutlineVisibility} from './processRender'
 import * as Request from './request'
-//import glbModelUrl from './glbModels/abandoned_warehouse_interior.glb'
-// import TV from './assets/TELEVISION.glb'
 
 global.THREE = THREE
 
@@ -34,16 +32,12 @@ var warehouseMesh;
 var axesHelper;
 
 
-async function initGUI() {
+async function initGUI() {  // initialize GUI
   processedFilesList = await Request.getFilesProcessedList();
-  // console.log(processedFilesList);
 
   const params = {
-    // general scene params
-    // speed: 1,
     enableMarkerMeasurements: false,
     renderOrigin: false,
-    // renderEmpty: true,
     renderFloor: true,
     renderTv: false,
     renderWarehouse: false,
@@ -53,27 +47,8 @@ async function initGUI() {
 
   // GUI controls
   const gui = new dat.GUI()
-  // gui.width = 300;
 
-  // gui.add(params, "speed", 1, 10, 0.5)
-  // gui.add(params, "lightOneSwitch").name('Red light').onChange((val) => {
-  //   rectLight1.intensity = val ? 5 : 0
-  // })
-  // gui.add(params, "lightTwoSwitch").name('Green light').onChange((val) => {
-  //   rectLight2.intensity = val ? 5 : 0
-  // })
-  // gui.add(params, "lightThreeSwitch").name('Blue light').onChange((val) => {
-  //   rectLight3.intensity = val ? 5 : 0
-  // })
-
-  // dotMaterial = new THREE.PointsMaterial({ size: 0.5, color: 0xFFFF00 }); //border
-  // const dotGeometry = new THREE.BufferGeometry();
-  // dotGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0.15, 0]), 3));
-  // originPoint = new THREE.Points(dotGeometry, dotMaterial);
-  // originPoint.visible = false;
-  // scene.add(originPoint);
-
-  axesHelper = new THREE.AxesHelper( 20 );
+  axesHelper = new THREE.AxesHelper( 20 );  //for showing origin point
   axesHelper.visible = false;
   scene.add( axesHelper );
   
@@ -96,10 +71,6 @@ async function initGUI() {
     axesHelper.visible = val ? true : false
   });
 
-  // gui.add(params, "renderOrigin").name('Show Origin').onChange((val) => {
-  //   originPoint.visible = val ? true : false
-  // });
-
   toggleVisbilityFolder.add(params, "renderFloor").name('Render Floor').onChange((val) => {
     mshStdFloor.visible = val ? true : false
   });
@@ -113,28 +84,10 @@ async function initGUI() {
 
   let mapFolder = gui.addFolder(`Map`);
 
-  // toggleVisbilityFolder.add(params, "renderRecent").name('Map').onChange((val) => {
-  //   toggleMapVisibility(false);
-  // });
-
-  // processedFilesList.forEach((file) => {
-  //   params[file] = false;
-  //   params[processedFilesList[processedFilesList.length]] = true;
-  //   mapFolder.add(params, file).name(file).onChange((val) => {
-  //     if (val) {
-  //       // renderAll(file);
-  //       console.log(file);
-  //     }
-  //   });
-  // });
 
   for (let index = 0; index < processedFilesList.length; index++) {
     const file = processedFilesList[index];
 
-    // if(index == processedFilesList.length - 1) params[file] = true;
-    // else params[file] = false;
-
-    // if(index == processedFilesList.length - 1)
      params[file] = function() {
       //remove distance marker points from the scene
       markerPoints.forEach((point) => {
@@ -143,38 +96,19 @@ async function initGUI() {
         scene.remove(point);
       });
       markerPoints = [];
-      renderSpecific(file);
+      console.log(file);
+      if(file == '2023_04_11-15_54_11_PM'){
+        renderSpecific(file, true);
+      }else{
+        renderSpecific(file, false);
+      }
     };
-    // else params[file] = false;
 
-    // params[file] = false;
-    // params[processedFilesList[processedFilesList.length]] = true;
     mapFolder.add(params, file);
-
-    // console.log(mapFolder);
-    // console.log(params);
-    
   }
 }
 
-
-// /**************************************************
-//  * 0. Tweakable parameters for the scene
-//  *************************************************/
-// const params = {
-//   // general scene params
-//   // speed: 1,
-//   enableMarkerMeasurements: false,
-//   renderOrigin: false,
-//   // renderEmpty: true,
-//   renderFloor: true,
-//   // Bokeh pass properties
-//   focus: 0.0,
-//   aperture: 0,
-//   maxblur: 0.0
-// }
-
-
+// Global variables for use within the three.js scene
 var renderFloor = true;
 const pointer = new THREE.Vector2();
 let raycaster;
@@ -206,17 +140,6 @@ let renderer = createRenderer({ antialias: true }, (_renderer) => {
 // Pass in fov, near, far and camera position respectively
 let camera = createCamera(45, 1, 1000, { x: 0, y: 5, z: -15 })
 
-// // (Optional) Create the EffectComposer and passes for post-processing
-// // If you don't need post-processing, just comment/delete the following creation code, and skip passing any composer to 'runApp' at the bottom
-// let bokehPass = new BokehPass(scene, camera, {
-//   focus: 0.0,
-//   aperture: 0.0,
-//   maxblur: 0.0
-// })
-// The RenderPass is already created in 'createComposer'
-// let composer = createComposer(renderer, scene, camera, (comp) => {
-//   comp.addPass(bokehPass)
-// })
 
 /**************************************************
  * 2. Build your scene in this threejs app
@@ -226,15 +149,13 @@ let camera = createCamera(45, 1, 1000, { x: 0, y: 5, z: -15 })
  *************************************************/
 let app = {
   async initScene() {
-    // processedFilesList = await Request.getFilesProcessedList();
-    // console.log(processedFilesList);
-    // OrbitControls
+    // OrbitControls for drag to move camera
     this.controls = new OrbitControls(camera, renderer.domElement)
     this.controls.enableDamping = true;
 
     // ambient light
     scene.add( new THREE.AmbientLight( 0x222222 ) );
-    // point light
+    // point lights
     const pointLight1 = new THREE.PointLight( 0xffffff, 1 );
     pointLight1.position.set(15,10,5)
     const pointLight2 = new THREE.PointLight( 0xffffff, 1 );
@@ -249,17 +170,8 @@ let app = {
     // need await to make sure animation starts only after texture is loaded
     // this works because the animation code is 'then-chained' after initScene(), see core-utils.runApp
     await this.loadTexture(mshStdFloor)
-    console.log(mshStdFloor)
     scene.add(mshStdFloor)
 
-    // Create the torus knot
-    const geoKnot = new THREE.TorusKnotGeometry(1.5, 0.5, 200, 16)
-    const matKnot = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0, metalness: 0 })
-    // save mesh to 'this' so that we can access it in the 'updateScene' function
-    this.meshKnot = new THREE.Mesh(geoKnot, matKnot)
-    this.meshKnot.position.set(0, 5, 0)
-    // update orbit controls to target meshKnot at center
-    this.controls.target.copy(this.meshKnot.position)
 
     // Stats - show fps
     this.stats1 = new Stats()
@@ -268,11 +180,9 @@ let app = {
     // this.container is the parent DOM element of the threejs canvas element
     this.container.appendChild(this.stats1.domElement)
 
-    let maxMinYValues = await renderRecent(); //lowGroundLevel, highGroundLevel, lowClearance, highClearance 
+    let maxMinYValues = await renderRecent(true); //lowGroundLevel, highGroundLevel, lowClearance, highClearance 
     var origin = getConfigJSON().origin;
-    // console.log(getConfigJSON);
-    //this.controls.target.set(-origin[0], 0, -origin[1]);
-    this.controls.target.set(0,0,0);
+    this.controls.target.set(0,0,0);  //set camera target to origin of map
 
     raycaster = new THREE.Raycaster();
 		raycaster.params.Points.threshold = 0.1;
@@ -324,7 +234,6 @@ let app = {
     mapSizeElement.innerText = 'Min/Max Clearance: ' + (maxMinYValues[2] - maxMinYValues[0]).toFixed(2) + 'm , ' + (maxMinYValues[3] - maxMinYValues[0]).toFixed(2) + 'm';
     mapSizeElement.id = 'mapSizeId';
     document.body.appendChild(mapSizeElement);
-    //lowGroundLevel, highGroundLevel, lowClearance, highClearance 
   },
 
 
@@ -396,10 +305,8 @@ function onLeftClick( event ){ //add marker point
 
 }
 
-function calcMarkerDist(){
+function calcMarkerDist(){  //calculate distance between marker points
   if(markerPoints.length == 2){
-    // console.log(markerPoints[0].geometry.attributes.position.array);
-    // console.log(markerPoints[1].geometry.attributes.position.array);
     let vec0 = new THREE.Vector3(markerPoints[0].geometry.attributes.position.array[0], markerPoints[0].geometry.attributes.position.array[1], markerPoints[0].geometry.attributes.position.array[2]);
     let vec1 = new THREE.Vector3(markerPoints[1].geometry.attributes.position.array[0], markerPoints[1].geometry.attributes.position.array[1], markerPoints[1].geometry.attributes.position.array[2]);
     let dist = vec0.distanceTo(vec1);
@@ -426,7 +333,7 @@ function onRightClick( event ){ //delete marker point
   }
 }
 
-function onPointerMove( event ) {
+function onPointerMove( event ) { //get elevation of point at mouse pointer
 
   pointer.x = ( event.clientX / window.innerWidth ) * 2 - 1;
   pointer.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
@@ -463,7 +370,7 @@ export function updateElements(existingMapName, newMapName, maxMinYValues) {
   mapSizeElement.innerText = 'Min/Max Clearance: ' + (maxMinYValues[2] - maxMinYValues[0]).toFixed(2) + 'm , ' + (maxMinYValues[3] - maxMinYValues[0]).toFixed(2) + 'm';
 }
 
-function loadAddGLBModels(){
+function loadAddGLBModels(){  //load and add .glb models to scene but set them to invisible
   // Instantiate a loader
   const loader = new GLTFLoader();
   const tvUrl = new URL('./glbModels/TELEVISION.glb', import.meta.url);
@@ -485,7 +392,6 @@ function loadAddGLBModels(){
   });
 
   loader.load(warehouseUrl+"/", function(gltf) {
-    console.log(gltf);
     warehouseMesh = gltf.scene;
     warehouseMesh.position.set(0, 2.9, 0);
     warehouseMesh.visible = false;

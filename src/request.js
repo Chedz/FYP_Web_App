@@ -1,5 +1,9 @@
 import jsyaml from 'js-yaml'; //convert yaml to json
 
+/**
+ * This file contains all the functions that are used to make requests to the server
+ */
+
 export async function get2dRecent(){
     await fetch('http://localhost:6968/2d/mostRecent') 
     .then(response => response.text())
